@@ -1,0 +1,63 @@
+# Django #
+*.log
+*.pot
+*.pyc
+__pycache__/
+local_settings.py
+db.sqlite3
+media/
+staticfiles/
+
+# Virtual Environment #
+venv/
+.env/
+.venv/
+env/
+
+# IDE & Editor #
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# OS & Git #
+.DS_Store
+Thumbs.db
+*.orig
+*.un~
+.gitattributes
+
+# Python #
+*.py[cod]
+*$py.class
+.python-version
+
+# Database #
+*.db
+*.sqlite
+
+# Cache and logs #
+.cache/
+logs/
+
+# Environments #
+.env
+.venv
+env/
+ENV/
+
+# Jupyter Notebook #
+.ipynb_checkpoints/
+
+# PyCharm #
+.idea/
+*.iml
+
+# VS Code #
+.vscode/
+
+# Docker #
+docker-compose.override.yml
+*.dockerignore
