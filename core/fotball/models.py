@@ -2,9 +2,17 @@ from django.db import models
 
 class User(models.Model):
     """
-    Модель пользователя где задается одна из ролей
-    В данной модели происходит регистрация пользователя и 
-    создается привязка к саду и тренеру.
+    Пользователь системы.
+
+    Описывает пользователя с одной из ролей: администратор, тренер или родитель.
+    При регистрации создаётся привязка к соответствующему тренеру и/или ребёнку.
+
+    Поля:
+        username (str): Логин пользователя.
+        password (str): Пароль пользователя.
+        role (str): Роль пользователя (администратор, тренер, родитель).
+        linked_trainer (Trainer): Привязанный тренер (если есть).
+        linked_child (Child): Привязанный ребёнок (если есть).
     """
     ROLE_CHOICES = [
             ('admin', 'Администратор'),
@@ -21,7 +29,14 @@ class User(models.Model):
 
 class Trainer(models.Model):
     """
-    Контактная информация о тренера и садах где работает тренер
+    Тренер.
+
+    Содержит контактную информацию о тренере и список детских садов/групп, где он работает.
+
+    Поля:
+        full_name (str): ФИО тренера.
+        phone (str): Контактный телефон.
+        work_space (str): Номера садов и групп, где ведёт занятия.
     """
     full_name = models.CharField(max_length=200,  verbose_name="ФИО")
     phone = models.CharField(max_length=20, verbose_name="Контактный телефон")
@@ -33,7 +48,15 @@ class Trainer(models.Model):
 
 class GroupKidGarden(models.Model):
     """
-    Информацмия о группах в детском саду с привязкой к тренеру
+    Группа детского сада.
+
+    Описывает группу в детском саду с указанием возрастной категории и привязанного тренера.
+
+    Поля:
+        name (str): Название группы.
+        kindergarten_number (str): Номер детского сада.
+        age_level (str): Возрастная категория (младшая, средняя, старшая).
+        trainer (Trainer): Тренер, ведущий занятия в группе.
     """
     AGE_LEVELS = [
         ('S', 'Младшая'),
@@ -49,7 +72,17 @@ class GroupKidGarden(models.Model):
 
 class Child(models.Model):
     """
-    Контактная информация о ребенке
+    Ребёнок.
+
+    Содержит контактную информацию о ребёнке и его родителе, а также принадлежность к группе.
+
+    Поля:
+        full_name (str): ФИО ребёнка.
+        birth_date (date): Дата рождения.
+        parent_name (str): Имя родителя.
+        phone_number (str): Телефон родителя.
+        group (GroupKidGarden): Группа, в которой занимается ребёнок.
+        is_active (bool): Посещает ли тренировки.
     """
     full_name = models.CharField(max_length=250, verbose_name="ФИО ребенка")
     birth_date = models.DateField(verbose_name="Дата рождения")
@@ -61,7 +94,16 @@ class Child(models.Model):
 
 class Attendance(models.Model):
     """
-    Учет посещаемости, данные заполняются тренером о присутсвиии или отсутсвии ребенка на тренировке
+    Посещаемость.
+
+    Учет посещаемости ребёнка на тренировках. Заполняется тренером.
+
+    Поля:
+        child (Child): Ребёнок.
+        group (GroupKidGarden): Группа.
+        date (date): Дата тренировки.
+        status (bool): Был/не был на тренировке.
+        reason (str): Причина отсутствия (если не был).
     """
     child = models.ForeignKey(Child, on_delete=models.CASCADE, related_name='attendances', verbose_name="Имя ребенка")
     group = models.ForeignKey(GroupKidGarden, on_delete=models.CASCADE, related_name='attendances', verbose_name="Группа занимающегося")
@@ -72,7 +114,14 @@ class Attendance(models.Model):
 
 class TrainingRate(models.Model):
     """
-    Определение стоимости для каждой группы в отдельности
+    Стоимость тренировки.
+
+    Определяет стоимость одного занятия для каждой группы на определённую дату.
+
+    Поля:
+        group (GroupKidGarden): Группа.
+        price (Decimal): Стоимость одного занятия.
+        active_form (date): Дата начала действия цены.
     """
     group = models.ForeignKey('GroupKidGarden', 
                                  on_delete=models.CASCADE,
