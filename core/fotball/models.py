@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.hashers import make_password
 
 class User(models.Model):
     """
@@ -26,6 +27,11 @@ class User(models.Model):
     linked_trainer = models.ForeignKey('Trainer', null=True, blank=True, on_delete=models.SET_NULL, related_name='users_linked')
     linked_child = models.ForeignKey('Child', null=True, blank=True, on_delete=models.SET_NULL, related_name='users_linked')
 
+    def save(self, *args, **kwargs):
+        # Если пароль не захэширован, сделать это
+        if not self.password.startswith('pbkdf2_sha256'):
+            self.password = make_password(self.password)
+        super().save(*args, **kwargs)
 
 class Trainer(models.Model):
     """
