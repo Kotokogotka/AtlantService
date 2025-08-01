@@ -70,7 +70,7 @@ class LoginApiViewTest(TestCase):
         self.assertEqual(Child.objects.count(), 0)
 
 
-    def test_seccessful_login_admin(self):
+    def test_successful_login_admin(self):
         """
         Тест 1: Успешная аутентификация администратора
         """
@@ -154,9 +154,9 @@ class LoginApiViewTest(TestCase):
         self.assertEqual(response.data['error'], 'Неверный логин или пароль')
 
     
-    def test_non_username(self):
+    def test_missing_username(self):
         """
-        Тест 6: Отсутсвие username
+        Тест 6: Отсутствие username
         """
 
         data = {
@@ -169,9 +169,9 @@ class LoginApiViewTest(TestCase):
         self.assertIn('username', response.data)
 
 
-    def test_non_password(self):
+    def test_missing_password(self):
         """
-        Тест 7: Отсутсвие password
+        Тест 7: Отсутствие password
         """
 
         data = {
@@ -186,7 +186,7 @@ class LoginApiViewTest(TestCase):
 
     def test_empty_data(self):
         """
-        Тест 8: Отсутсвие данных
+        Тест 8: Отсутствие данных
         """
 
         data = {
@@ -198,7 +198,7 @@ class LoginApiViewTest(TestCase):
         self.assertIn('password', response.data)
 
     
-    def test_check_structires(self):
+    def test_response_structure(self):
         """
         Тест 9: Проверка структуры ответа JSON
         """

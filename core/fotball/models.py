@@ -26,7 +26,7 @@ class User(models.Model):
     password = models.CharField(max_length=128, verbose_name="Пароль пользователя")
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, verbose_name="Роль пользователя")
     linked_trainer = models.ForeignKey('Trainer', null=True, blank=True, on_delete=models.SET_NULL, related_name='users_linked')
-    linked_parent = models.ForeignKey('Parent', null=True, blank=True, on_delete=models.SET_NULL, related_name='users_linked')
+    linked_child = models.ForeignKey('Child', null=True, blank=True, on_delete=models.SET_NULL, related_name='users_linked')
 
     def save(self, *args, **kwargs):
         # Если пароль не захэширован, сделать это
@@ -48,17 +48,18 @@ class User(models.Model):
             self.save(update_fields=['linked_trainer'])
             print(f'Тренер {self.username} создан и привязан к пользователю')
         
-        # Если это родитель и у него нет связанного родителя, создаем его
-        elif self.role == 'parent' and not self.linked_parent:
-            parent, created = Parent.objects.get_or_create(
-                full_name=f'Родитель {self.username}',
+        # Если это родитель и у него нет связанного ребенка, создаем его
+        elif self.role == 'parent' and not self.linked_child:
+            child, created = Child.objects.get_or_create(
+                full_name=f'Ребенок {self.username}',
                 defaults={
-                    'phone': ''
+                    'birth_date': timezone.now().date(),
+                    'is_active': True
                 }
             )
-            self.linked_parent = parent
-            self.save(update_fields=['linked_parent'])
-            print(f'Родитель {self.username} создан и привязан к пользователю')
+            self.linked_child = child
+            self.save(update_fields=['linked_child'])
+            print(f'Ребенок {self.username} создан и привязан к пользователю')
 
     
 
@@ -89,19 +90,12 @@ class User(models.Model):
     
     def get_parent_info(self):
         """Получение информации о родителе"""
-        if self.role == 'parent' and self.linked_parent:
+        if self.role == 'parent' and self.linked_child:
             return {
-                'full_name': self.linked_parent.full_name,
-                'phone': self.linked_parent.phone,
-                'children': [
-                    {
-                        'full_name': child.full_name,
-                        'birth_date': child.birth_date,
-                        'group': child.group.name if child.group else None,
-                        'is_active': child.is_active
-                    } for child in self.linked_parent.children.all()
-                ],
-                'children_count': self.linked_parent.children.count()
+                'full_name': self.linked_child.full_name,
+                'birth_date': self.linked_child.birth_date,
+                'group': self.linked_child.group.name if self.linked_child.group else None,
+                'is_active': self.linked_child.is_active
             }
         return None
 
@@ -146,6 +140,7 @@ class Trainer(models.Model):
     """
     full_name = models.CharField(max_length=200, verbose_name="ФИО")
     phone = models.CharField(max_length=20, verbose_name="Контактный телефон")
+    work_space = models.CharField(max_length=500, verbose_name="Номер сада и группы где ведет заниятие данный тренер")
     groups = models.ManyToManyField('GroupKidGarden', blank=True, related_name='trainers', verbose_name="Группы")
 
     def __str__(self):
@@ -175,7 +170,9 @@ class GroupKidGarden(models.Model):
     age_level = models.CharField(max_length=1, choices=AGE_LEVELS, verbose_name="Возрастная группа")
     trainer = models.ForeignKey('Trainer', on_delete=models.SET_NULL, null=True, related_name='assigned_groups', verbose_name="Тренер в групе")
 
-
+    def __str__(self):
+        return f"{self.name}"
+    
 class Parent(models.Model):
     """
     Родитель.
@@ -209,9 +206,12 @@ class Child(models.Model):
     """
     full_name = models.CharField(max_length=250, verbose_name="ФИО ребенка")
     birth_date = models.DateField(verbose_name="Дата рождения")
-    group = models.ForeignKey(GroupKidGarden, on_delete=models.SET_NULL, null=True, related_name='children', verbose_name="Группа ребенка")
+    parent_name = models.ForeignKey(Parent, on_delete=models.SET_NULL, null=True, related_name='linked_parent', verbose_name="Имя родителя")
+    group = models.ForeignKey(GroupKidGarden, on_delete=models.SET_NULL, null=True, related_name='children_group', verbose_name="Группа ребенка")
     is_active = models.BooleanField(default=True, verbose_name="Посещает тренировки Да\Нет")
 
+    def __str__(self):
+        return f"{self.full_name}"
 
 class Attendance(models.Model):
     """
@@ -231,6 +231,9 @@ class Attendance(models.Model):
     date = models.DateField(verbose_name="Дата посещения тренировки")
     status = models.BooleanField(verbose_name="Был\Не был")
     reason = models.TextField(null=True, blank=True, verbose_name="Причина отсутсвия")
+
+    def __str__(self):
+        return f"{self.child.full_name} - {self.date} ({'Был' if self.status else 'Не был'})"
 
 
 class TrainingRate(models.Model):
