@@ -12,6 +12,11 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,12 +26,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-)%5w)+*m^nas)$hg0u9w)__g16hyl7o185m9w=!#-u+4&a=#4o'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-)%5w)+*m^nas)$hg0u9w)__g16hyl7o185m9w=!#-u+4&a=#4o')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',') if os.getenv('ALLOWED_HOSTS') else []
 
 
 # Application definition
@@ -47,6 +52,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'fotball.middleware.UnicodeErrorHandlingMiddleware',  # Обработка ошибок Unicode
+    'fotball.middleware.EncodingFixMiddleware',  # Исправление кодировки
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -112,17 +119,27 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'fotball_db',
-        'USER': 'Kotokogotka',
-        'PASSWORD': 'dfsg7f8gjkb.m,!045mc',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.getenv('DB_NAME', 'fotball_db'),
+        'USER': os.getenv('DB_USER', 'Kotokogotka'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'dfsg7f8gjkb.m,!045mc'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
+        'OPTIONS': {
+            'charset': 'utf8',
+            'client_encoding': 'UTF8',
+            'default_transaction_isolation': 'read committed',
+            'timezone': 'Europe/Moscow',
+        },
     },
     'test': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'test_db.sqlite3',
     }
 }
+
+# File upload settings to handle encoding properly
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
+DEFAULT_CHARSET = 'utf-8'
 
 
 # Password validation
@@ -183,7 +200,7 @@ AUTHENTICATION_BACKENDS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'ru'
+LANGUAGE_CODE = 'ru-ru'
 
 LANGUAGES = [
     ('ru', 'Русский'),
@@ -194,11 +211,17 @@ LOCALE_PATHS = [
     BASE_DIR / 'locale',
 ]
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Europe/Moscow'
 
 USE_I18N = True
 
 USE_TZ = True
+
+# Ensure proper encoding for all text processing
+import locale
+import os
+os.environ.setdefault('LANG', 'ru_RU.UTF-8')
+os.environ.setdefault('LC_ALL', 'ru_RU.UTF-8')
 
 
 # Static files (CSS, JavaScript, Images)
@@ -215,3 +238,65 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 import sys
 if 'test' in sys.argv:
     DATABASES['default'] = DATABASES['test']
+
+# Логирование для отслеживания проблем с кодировкой
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'django.log',
+            'formatter': 'verbose',
+        },
+        'encoding_file': {
+            'level': 'WARNING',
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'encoding_errors.log',
+            'formatter': 'verbose',
+        },
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'fotball.middleware': {
+            'handlers': ['encoding_file', 'console'],
+            'level': 'WARNING',
+            'propagate': True,
+        },
+        'fotball': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}
+
+# Создать директорию для логов если её нет
+import os
+logs_dir = BASE_DIR / 'logs'
+if not logs_dir.exists():
+    logs_dir.mkdir(exist_ok=True)
