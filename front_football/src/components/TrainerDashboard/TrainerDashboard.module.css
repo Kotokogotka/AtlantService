@@ -1,0 +1,129 @@
+.dashboard {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #111 60%, #FFD600 100%);
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  background: rgba(34, 34, 34, 0.95);
+  border-bottom: 2px solid #FFD600;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  backdrop-filter: blur(10px);
+}
+
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  color: #FFD600;
+  font-weight: 600;
+}
+
+.userInfo span {
+  font-size: 14px;
+}
+
+.logoutButton {
+  padding: 8px 16px;
+  background: linear-gradient(90deg, #FFD600 60%, #111 100%);
+  color: #111;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logoutButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 214, 0, 0.3);
+}
+
+.main {
+  flex: 1;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.main h1 {
+  color: #FFD600;
+  font-size: 32px;
+  font-weight: 900;
+  margin-bottom: 32px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.groups {
+  width: 100%;
+  max-width: 800px;
+  background: rgba(34, 34, 34, 0.95);
+  border-radius: 12px;
+  padding: 24px;
+  border: 2px solid #FFD600;
+  backdrop-filter: blur(10px);
+}
+
+.groups h2 {
+  color: #FFD600;
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.group {
+  background: rgba(17, 17, 17, 0.8);
+  border: 1px solid #FFD600;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  color: #fff;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.group:hover {
+  background: rgba(255, 214, 0, 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 214, 0, 0.2);
+}
+
+.groups p {
+  color: #fff;
+  text-align: center;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 12px 16px;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .userInfo {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+  
+  .main {
+    padding: 20px;
+  }
+  
+  .main h1 {
+    font-size: 24px;
+  }
+  
+  .groups {
+    padding: 16px;
+  }
+} 

@@ -1,0 +1,317 @@
+.container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #111 60%, #FFD600 100%);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* Информация о пользователе в правом верхнем углу */
+.userInfo {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 10;
+}
+
+.userCard {
+  background: rgba(34, 34, 34, 0.95);
+  border: 2px solid #FFD600;
+  border-radius: 12px;
+  padding: 16px;
+  min-width: 250px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.userHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #FFD600;
+}
+
+.userIcon {
+  font-size: 20px;
+}
+
+.username {
+  color: #FFD600;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.userDetails {
+  margin-bottom: 12px;
+}
+
+.userDetail {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.label {
+  color: #FFD600;
+  font-weight: 600;
+}
+
+.value {
+  color: #fff;
+  font-weight: 500;
+}
+
+.logoutButton {
+  width: 100%;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, #FFD600 60%, #111 100%);
+  color: #111;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logoutButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 214, 0, 0.3);
+}
+
+/* Основная секция входа */
+.loginSection {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 500px;
+}
+
+.formContainer {
+  background: rgba(34, 34, 34, 0.95);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
+  padding: 40px 32px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 3px solid #FFD600;
+  backdrop-filter: blur(10px);
+}
+
+.logoWrap {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+  gap: 12px;
+}
+
+.ball {
+  font-size: 40px;
+  filter: drop-shadow(0 2px 2px #FFD600);
+}
+
+.title {
+  color: #FFD600;
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: 1px;
+  text-shadow: 1px 1px 2px #000;
+}
+
+.subtitle {
+  color: #FFD600;
+  font-weight: 700;
+  font-size: 18px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.inputGroup {
+  width: 100%;
+  margin-bottom: 18px;
+}
+
+.label {
+  color: #FFD600;
+  font-weight: 700;
+  margin-bottom: 6px;
+  display: block;
+  font-size: 15px;
+}
+
+.input {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1.5px solid #FFD600;
+  font-size: 16px;
+  background: rgba(17, 17, 17, 0.8);
+  color: #FFD600;
+  outline: none;
+  margin-top: 2px;
+  font-weight: 500;
+  box-sizing: border-box;
+  transition: all 0.2s;
+}
+
+.input:focus {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+.input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.input::placeholder {
+  color: rgba(255, 214, 0, 0.6);
+}
+
+.button {
+  width: 100%;
+  padding: 14px 0;
+  background: linear-gradient(90deg, #FFD600 60%, #111 100%);
+  color: #111;
+  font-weight: 900;
+  font-size: 18px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 10px;
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.15);
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+
+.button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(255, 214, 0, 0.3);
+}
+
+.button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.button.loading {
+  background: linear-gradient(90deg, #999 60%, #111 100%);
+  cursor: wait;
+}
+
+.error {
+  color: #FFD600;
+  background: rgba(17, 17, 17, 0.8);
+  border: 1px solid #FFD600;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  text-align: center;
+}
+
+.success {
+  color: #111;
+  background: #FFD600;
+  border: 1px solid #FFD600;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Секция приветствия после входа */
+.welcomeSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+}
+
+.welcomeMessage {
+  margin-bottom: 20px;
+}
+
+.welcomeMessage h3 {
+  color: #FFD600;
+  font-size: 24px;
+  font-weight: 900;
+  margin-bottom: 12px;
+  text-shadow: 1px 1px 2px #000;
+}
+
+.welcomeMessage p {
+  color: #fff;
+  font-size: 16px;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.welcomeIcon {
+  font-size: 60px;
+  filter: drop-shadow(0 4px 4px rgba(255, 214, 0, 0.5));
+  animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  60% {
+    transform: translateY(-5px);
+  }
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .container {
+    padding: 10px;
+  }
+  
+  .userInfo {
+    position: relative;
+    top: auto;
+    right: auto;
+    margin-bottom: 20px;
+    width: 100%;
+  }
+  
+  .userCard {
+    min-width: auto;
+    width: 100%;
+  }
+  
+  .formContainer {
+    padding: 30px 20px;
+  }
+  
+  .title {
+    font-size: 20px;
+  }
+  
+  .subtitle {
+    font-size: 16px;
+  }
+} 

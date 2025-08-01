@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.hashers import make_password
+from django.utils import timezone
 
 class User(models.Model):
     """
@@ -25,28 +26,127 @@ class User(models.Model):
     password = models.CharField(max_length=128, verbose_name="Пароль пользователя")
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, verbose_name="Роль пользователя")
     linked_trainer = models.ForeignKey('Trainer', null=True, blank=True, on_delete=models.SET_NULL, related_name='users_linked')
-    linked_child = models.ForeignKey('Child', null=True, blank=True, on_delete=models.SET_NULL, related_name='users_linked')
+    linked_parent = models.ForeignKey('Parent', null=True, blank=True, on_delete=models.SET_NULL, related_name='users_linked')
 
     def save(self, *args, **kwargs):
         # Если пароль не захэширован, сделать это
-        if not self.password.startswith('pbkdf2_sha256'):
+        if not self.password.startswith(('pbkdf2_sha256$', 'bcrypt$', 'argon2')):
             self.password = make_password(self.password)
+        
+        # Сохраняем пользователя
         super().save(*args, **kwargs)
+
+        # Если это роль тренера и у него нет связанного тренера, то создаем его
+        if self.role == 'trainer' and not self.linked_trainer:
+            trainer, created = Trainer.objects.get_or_create(
+                full_name=f'Тренер {self.username}',
+                defaults={
+                    'phone': ''
+                }
+            )
+            self.linked_trainer = trainer
+            self.save(update_fields=['linked_trainer'])
+            print(f'Тренер {self.username} создан и привязан к пользователю')
+        
+        # Если это родитель и у него нет связанного родителя, создаем его
+        elif self.role == 'parent' and not self.linked_parent:
+            parent, created = Parent.objects.get_or_create(
+                full_name=f'Родитель {self.username}',
+                defaults={
+                    'phone': ''
+                }
+            )
+            self.linked_parent = parent
+            self.save(update_fields=['linked_parent'])
+            print(f'Родитель {self.username} создан и привязан к пользователю')
+
+    
+
+
+    def get_trainer_groups(self):
+        """Получение группы тренера"""
+        if self.role == 'trainer' and self.linked_trainer:
+            return self.linked_trainer.groups.all()
+        return GroupKidGarden.objects.none()
+
+    
+    def get_trainer_info(self):
+        """Получение информации о тренере"""
+        if self.role == 'trainer' and self.linked_trainer:
+            return {
+                'full_name': self.linked_trainer.full_name,
+                'phone': self.linked_trainer.phone,
+                'groups': [
+                    {
+                        'name': group.name,
+                        'kindergarten_number': group.kindergarten_number,
+                        'age_level': group.get_age_level_display()
+                    } for group in self.linked_trainer.groups.all()
+                ],
+                'groups_count': self.linked_trainer.groups.count()
+            }
+        return None
+    
+    def get_parent_info(self):
+        """Получение информации о родителе"""
+        if self.role == 'parent' and self.linked_parent:
+            return {
+                'full_name': self.linked_parent.full_name,
+                'phone': self.linked_parent.phone,
+                'children': [
+                    {
+                        'full_name': child.full_name,
+                        'birth_date': child.birth_date,
+                        'group': child.group.name if child.group else None,
+                        'is_active': child.is_active
+                    } for child in self.linked_parent.children.all()
+                ],
+                'children_count': self.linked_parent.children.count()
+            }
+        return None
+
+
+    def __str__(self):
+        return self.username
+    
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_anonymous(self):
+        return False
+
+    def get_username(self):
+        return self.username
+
+    def is_active(self):
+        return True
+
+    def has_perm(self, perm, obj=None):
+        return True
+
+    def has_perms(self, perm_list, obj=None):
+        return True
+
+    def has_module_perms(self, app_label):
+        return True
+    
 
 class Trainer(models.Model):
     """
     Тренер.
 
-    Содержит контактную информацию о тренере и список детских садов/групп, где он работает.
+    Содержит контактную информацию о тренере и детский сад, где он работает.
 
     Поля:
         full_name (str): ФИО тренера.
         phone (str): Контактный телефон.
-        work_space (str): Номера садов и групп, где ведёт занятия.
+        kindergarten (GroupKidGarden): Детский сад, где работает тренер.
     """
-    full_name = models.CharField(max_length=200,  verbose_name="ФИО")
+    full_name = models.CharField(max_length=200, verbose_name="ФИО")
     phone = models.CharField(max_length=20, verbose_name="Контактный телефон")
-    work_space = models.CharField(max_length=500, verbose_name="Номер сада и группы где ведет заниятие данный тренер")
+    groups = models.ManyToManyField('GroupKidGarden', blank=True, related_name='trainers', verbose_name="Группы")
 
     def __str__(self):
         return self.full_name
@@ -73,27 +173,42 @@ class GroupKidGarden(models.Model):
     name = models.CharField(max_length=100, verbose_name="Название группы")
     kindergarten_number = models.CharField(max_length=20, verbose_name="Номер сада")
     age_level = models.CharField(max_length=1, choices=AGE_LEVELS, verbose_name="Возрастная группа")
-    trainer = models.ForeignKey('Trainer', on_delete=models.SET_NULL, null=True, related_name='groups', verbose_name="Тренер в групе")
+    trainer = models.ForeignKey('Trainer', on_delete=models.SET_NULL, null=True, related_name='assigned_groups', verbose_name="Тренер в групе")
+
+
+class Parent(models.Model):
+    """
+    Родитель.
+    
+    Содержит контактную информацию о родителе и его детях.
+    
+    Поля:
+        full_name (str): ФИО родителя.
+        phone (str): Контактный телефон.
+        children (ManyToMany): Дети родителя.
+    """
+    full_name = models.CharField(max_length=250, verbose_name="ФИО родителя")
+    phone = models.CharField(max_length=20, verbose_name="Контактный телефон")
+    children = models.ManyToManyField('Child', blank=True, related_name='parents', verbose_name="Дети")
+    
+    def __str__(self):
+        return self.full_name
 
 
 class Child(models.Model):
     """
     Ребёнок.
 
-    Содержит контактную информацию о ребёнке и его родителе, а также принадлежность к группе.
+    Содержит контактную информацию о ребёнке и принадлежность к группе.
 
     Поля:
         full_name (str): ФИО ребёнка.
         birth_date (date): Дата рождения.
-        parent_name (str): Имя родителя.
-        phone_number (str): Телефон родителя.
         group (GroupKidGarden): Группа, в которой занимается ребёнок.
         is_active (bool): Посещает ли тренировки.
     """
     full_name = models.CharField(max_length=250, verbose_name="ФИО ребенка")
     birth_date = models.DateField(verbose_name="Дата рождения")
-    parent_name = models.CharField(max_length=250, verbose_name="Имя родителя")
-    phone_number = models.CharField(max_length=12, verbose_name="Номер телефона родителя")
     group = models.ForeignKey(GroupKidGarden, on_delete=models.SET_NULL, null=True, related_name='children', verbose_name="Группа ребенка")
     is_active = models.BooleanField(default=True, verbose_name="Посещает тренировки Да\Нет")
 
