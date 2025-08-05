@@ -1,118 +1,294 @@
 .dashboard {
   min-height: 100vh;
-  background: linear-gradient(135deg, #111 60%, #FFD600 100%);
-  display: flex;
-  flex-direction: column;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
 }
 
 .header {
-  background: rgba(34, 34, 34, 0.95);
-  border-bottom: 2px solid #FFD600;
-  padding: 16px 24px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 20px;
+  margin-bottom: 30px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
 .userInfo {
   display: flex;
-  align-items: center;
-  gap: 20px;
-  color: #FFD600;
-  font-weight: 600;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .userInfo span {
   font-size: 14px;
+  color: #333;
+  font-weight: 500;
 }
 
 .logoutButton {
-  padding: 8px 16px;
-  background: linear-gradient(90deg, #FFD600 60%, #111 100%);
-  color: #111;
-  font-weight: 700;
-  font-size: 14px;
+  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+  color: white;
   border: none;
-  border-radius: 6px;
+  padding: 12px 24px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  font-weight: 600;
+  transition: all 0.3s ease;
 }
 
 .logoutButton:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(255, 214, 0, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(255, 107, 107, 0.3);
 }
 
 .main {
-  flex: 1;
-  padding: 32px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 30px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
 .main h1 {
-  color: #FFD600;
-  font-size: 32px;
-  font-weight: 900;
-  margin-bottom: 32px;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-}
-
-.groups {
-  width: 100%;
-  max-width: 800px;
-  background: rgba(34, 34, 34, 0.95);
-  border-radius: 12px;
-  padding: 24px;
-  border: 2px solid #FFD600;
-  backdrop-filter: blur(10px);
-}
-
-.groups h2 {
-  color: #FFD600;
-  font-size: 24px;
+  color: #2c3e50;
+  margin-bottom: 30px;
+  text-align: center;
+  font-size: 2.5rem;
   font-weight: 700;
-  margin-bottom: 20px;
-  text-align: center;
 }
 
-.group {
-  background: rgba(17, 17, 17, 0.8);
-  border: 1px solid #FFD600;
+.loading {
+  text-align: center;
+  font-size: 18px;
+  color: #666;
+  padding: 40px;
+}
+
+.error {
+  background: #ffe6e6;
+  border: 1px solid #ff9999;
   border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 12px;
-  color: #fff;
+  padding: 15px;
+  margin-bottom: 20px;
+  color: #d63031;
+}
+
+.error button {
+  background: #d63031;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+}
+
+.groupsSection {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.groupsSection h2 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+}
+
+.groupsList {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.groupCard {
+  background: white;
+  border-radius: 10px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.groupCard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.groupCard.selected {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.groupHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.groupHeader h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.ageLevel {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
   font-weight: 500;
-  transition: all 0.2s;
 }
 
-.group:hover {
-  background: rgba(255, 214, 0, 0.1);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 214, 0, 0.2);
-}
-
-.groups p {
-  color: #fff;
-  text-align: center;
-  font-style: italic;
+.groupInfo p {
+  margin: 0;
+  font-size: 14px;
   opacity: 0.8;
 }
 
+.noGroups {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+  padding: 40px;
+}
+
+.groupDetail {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.groupDetail h2 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+}
+
+.groupStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.stat {
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.stat span:first-child {
+  font-weight: 500;
+  color: #666;
+}
+
+.stat span:last-child {
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.childrenSection h3 {
+  color: #2c3e50;
+  margin-bottom: 15px;
+  font-size: 1.3rem;
+}
+
+.childrenList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.childCard {
+  background: white;
+  border-radius: 8px;
+  padding: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.childInfo h4 {
+  margin: 0 0 8px 0;
+  color: #2c3e50;
+  font-size: 1.1rem;
+}
+
+.childInfo p {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.attendanceCount {
+  margin-top: 8px !important;
+  padding: 6px 10px;
+  color: #333;
+  font-size: 13px !important;
+  font-weight: 500;
+}
+
+.childStatus {
+  display: flex;
+  align-items: center;
+}
+
+.status {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status.active {
+  background: #00b894;
+  color: white;
+}
+
+.status.inactive {
+  background: #d63031;
+  color: white;
+}
+
+/* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
-  .header {
-    padding: 12px 16px;
-    flex-direction: column;
-    gap: 12px;
+  .content {
+    grid-template-columns: 1fr;
+    gap: 20px;
   }
   
-  .userInfo {
+  .header {
     flex-direction: column;
-    gap: 8px;
+    gap: 15px;
     text-align: center;
+  }
+  
+  .groupStats {
+    grid-template-columns: 1fr;
+  }
+  
+  .childCard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
   
   .main {
@@ -120,10 +296,6 @@
   }
   
   .main h1 {
-    font-size: 24px;
-  }
-  
-  .groups {
-    padding: 16px;
+    font-size: 2rem;
   }
 } 
