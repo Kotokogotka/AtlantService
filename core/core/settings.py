@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-)%5w)+*m^nas)$hg0u9w)__g16hyl7o185m9w=!#-u+4&a=#4o
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['', 'localhost', '127.0.0.1', '89.169.48.246', 'perceptively-good-hedgehog.cloudpub.ru', 'wisely-primed-monster.cloudpub.ru', 'api-wisely-primed-monster.cloudpub.ru', 'd5f76426afedbc5935345cde79c76c55.serveo.net']
 
 
 # Application definition
@@ -63,6 +63,7 @@ CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "http://localhost:8000",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -205,6 +206,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# Media files (uploads)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

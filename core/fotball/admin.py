@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Child, Trainer, GroupKidGarden, Attendance, User, Parent, TrainingRate
+from .models import Child, Trainer, GroupKidGarden, Attendance, User, Parent, TrainingRate, MedicalCertificate, TrainingSchedule, TrainerComment, ScheduleChangeNotification, NotificationRead
 
 
 @admin.register(User)
@@ -47,15 +47,22 @@ class TrainerAdmin(admin.ModelAdmin):
 
 @admin.register(GroupKidGarden)
 class GroupKidGardenAdmin(admin.ModelAdmin):
-    list_display = ('name', 'kindergarten_number', 'age_level', 'trainer')
-    list_filter = ('age_level', 'kindergarten_number', 'trainer')
+    list_display = ('name', 'kindergarten_number', 'age_level', 'get_trainers')
+    list_filter = ('age_level', 'kindergarten_number')
     search_fields = ('name', 'kindergarten_number')
     
     fieldsets = (
         ('Основная информация', {
-            'fields': ('name', 'kindergarten_number', 'age_level', 'trainer')
+            'fields': ('name', 'kindergarten_number', 'age_level')
         }),
     )
+    
+    def get_trainers(self, obj):
+        trainers = obj.trainers.all()
+        if trainers:
+            return ', '.join([trainer.full_name for trainer in trainers])
+        return 'Не назначены'
+    get_trainers.short_description = 'Тренеры'
 
 
 @admin.register(Parent)
@@ -136,4 +143,124 @@ class TrainingRateAdmin(admin.ModelAdmin):
             'fields': ('group', 'price', 'active_form')
         }),
     )
+
+
+@admin.register(MedicalCertificate)
+class MedicalCertificateAdmin(admin.ModelAdmin):
+    list_display = ('child', 'parent', 'date_from', 'date_to', 'status', 'total_cost', 'uploaded_at')
+    list_filter = ('status', 'uploaded_at', 'date_from', 'date_to')
+    search_fields = ('child__full_name', 'parent__username', 'note', 'absence_reason')
+    date_hierarchy = 'uploaded_at'
+    readonly_fields = ('uploaded_at', 'total_cost')
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('child', 'parent', 'certificate_file', 'date_from', 'date_to')
+        }),
+        ('Детали справки', {
+            'fields': ('note', 'absence_reason'),
+            'classes': ('collapse',)
+        }),
+        ('Финансовая информация', {
+            'fields': ('cost_per_lesson', 'total_cost'),
+            'classes': ('collapse',)
+        }),
+        ('Статус и комментарии', {
+            'fields': ('status', 'admin_comment'),
+            'classes': ('collapse',)
+        }),
+        ('Системная информация', {
+            'fields': ('uploaded_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('child', 'parent')
+
+
+@admin.register(TrainingSchedule)
+class TrainingScheduleAdmin(admin.ModelAdmin):
+    list_display = ('group', 'date', 'time', 'trainer', 'status', 'created_by', 'created_at')
+    list_filter = ('status', 'date', 'group', 'trainer', 'created_at')
+    search_fields = ('group__name', 'trainer__full_name', 'location', 'notes')
+    date_hierarchy = 'date'
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('group', 'trainer', 'date', 'time', 'duration_minutes')
+        }),
+        ('Дополнительно', {
+            'fields': ('location', 'status', 'notes'),
+            'classes': ('collapse',)
+        }),
+        ('Системная информация', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('group', 'trainer', 'created_by')
+
+
+@admin.register(TrainerComment)
+class TrainerCommentAdmin(admin.ModelAdmin):
+    list_display = ('trainer', 'child', 'comment_preview', 'created_at')
+    list_filter = ('trainer', 'created_at')
+    search_fields = ('trainer__full_name', 'child__full_name', 'comment_text')
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('trainer', 'child', 'comment_text')
+        }),
+        ('Временные метки', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def comment_preview(self, obj):
+        return obj.comment_text[:50] + '...' if len(obj.comment_text) > 50 else obj.comment_text
+    comment_preview.short_description = 'Комментарий'
+
+
+@admin.register(ScheduleChangeNotification)
+class ScheduleChangeNotificationAdmin(admin.ModelAdmin):
+    list_display = ('training', 'notification_type', 'message_preview', 'created_by', 'created_at', 'is_read_by_trainer')
+    list_filter = ('notification_type', 'created_at', 'is_read_by_trainer')
+    search_fields = ('training__group__name', 'message', 'created_by__username')
+    readonly_fields = ('created_at',)
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('training', 'notification_type', 'message', 'created_by')
+        }),
+        ('Изменения', {
+            'fields': ('old_date', 'new_date', 'old_time', 'new_time'),
+            'classes': ('collapse',)
+        }),
+        ('Статус', {
+            'fields': ('is_read_by_trainer', 'created_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def message_preview(self, obj):
+        return obj.message[:50] + '...' if len(obj.message) > 50 else obj.message
+    message_preview.short_description = 'Сообщение'
+
+
+@admin.register(NotificationRead)
+class NotificationReadAdmin(admin.ModelAdmin):
+    list_display = ('user', 'notification_preview', 'read_at')
+    list_filter = ('read_at',)
+    search_fields = ('user__username', 'notification__message')
+    readonly_fields = ('read_at',)
+    
+    def notification_preview(self, obj):
+        return f"{obj.notification.training.group.name} - {obj.notification.get_notification_type_display()}"
+    notification_preview.short_description = 'Уведомление'
 

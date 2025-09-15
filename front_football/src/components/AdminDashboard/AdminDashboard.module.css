@@ -1,0 +1,926 @@
+/* Основной контейнер */
+.dashboard {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 0;
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Заголовок */
+.header {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.title {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Контейнер уведомлений */
+.notificationContainer {
+  position: relative;
+}
+
+.notificationButton {
+  background: #3498db;
+  border: none;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+}
+
+.notificationButton:hover {
+  background: #2980b9;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+}
+
+.notificationBadge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #e74c3c;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: bold;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+/* Выпадающий список уведомлений */
+.notificationsDropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  min-width: 350px;
+  max-width: 400px;
+  max-height: 500px;
+  overflow: hidden;
+  z-index: 1000;
+  margin-top: 0.5rem;
+}
+
+.notificationsHeader {
+  background: #f8f9fa;
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.notificationsHeader h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.1rem;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #6c757d;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.closeButton:hover {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.noNotifications {
+  padding: 2rem;
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.notificationsList {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.notificationItem {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #f1f3f4;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.notificationItem:hover {
+  background: #f8f9fa;
+}
+
+.notificationItem:last-child {
+  border-bottom: none;
+}
+
+.notificationType {
+  font-size: 1.5rem;
+  margin-right: 1rem;
+  flex-shrink: 0;
+}
+
+.notificationContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.notificationTitle {
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 0.25rem;
+  font-size: 0.95rem;
+}
+
+.notificationDetails {
+  color: #6c757d;
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+
+.notificationDate {
+  color: #adb5bd;
+  font-size: 0.8rem;
+}
+
+/* Кнопка выхода */
+.logoutButton {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.logoutButton:hover {
+  background: #c0392b;
+  transform: translateY(-1px);
+}
+
+/* Вкладки навигации */
+.tabs {
+  display: flex;
+  gap: 1rem;
+}
+
+.tab {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tab:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.tab.activeTab {
+  background: rgba(255, 255, 255, 0.9);
+  color: #2c3e50;
+}
+
+.tabBadge {
+  background: #e74c3c;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+/* Основной контент */
+.main {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.tabContent {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  min-height: 400px;
+}
+
+
+.noNotificationsMain {
+  text-align: center;
+  padding: 3rem;
+  color: #6c757d;
+}
+
+.noNotificationsMain h3 {
+  color: #2c3e50;
+  margin-bottom: 1rem;
+}
+
+.alert {
+  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 500;
+  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+  animation: slideIn 0.5s ease;
+}
+
+/* Стили для расписания */
+.scheduleContainer {
+  width: 100%;
+}
+
+.scheduleHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.scheduleHeader h2 {
+  color: #2c3e50;
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.scheduleActions {
+  display: flex;
+  gap: 1rem;
+}
+
+.addTrainingButton,
+.editTrainingButton {
+  background: #28a745;
+  color: rgb(7, 7, 7);
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.editTrainingButton {
+  background: #3498db;
+}
+
+.addTrainingButton:hover {
+  background: #218838;
+  transform: translateY(-1px);
+}
+
+.editTrainingButton:hover {
+  background: #2980b9;
+  transform: translateY(-1px);
+}
+
+/* Селектор дней недели */
+.weekdaysSelector {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-size: 0.9rem;
+}
+
+.checkboxLabel:hover {
+  background: #e9ecef;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  margin: 0;
+  transform: scale(1.1);
+}
+
+.scheduleContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.kindergartenSelector h3,
+.groupSelector h3 {
+  color: #2c3e50;
+  margin-bottom: 1rem;
+  font-size: 1.3rem;
+}
+
+.kindergartenList,
+.groupList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.kindergartenCard,
+.groupCard {
+  background: white;
+  border: 2px solid #e9ecef;
+  border-radius: 12px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: left;
+}
+
+.kindergartenCard:hover,
+.groupCard:hover {
+  border-color: #3498db;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(52, 152, 219, 0.2);
+}
+
+.kindergartenCard.selected,
+.groupCard.selected {
+  border-color: #3498db;
+  background: #f8f9fa;
+  box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+}
+
+.kindergartenCard h4,
+.groupCard h4 {
+  color: #2c3e50;
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+}
+
+.kindergartenCard p,
+.groupCard p {
+  color: #6c757d;
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+}
+
+/* Форма создания тренировки */
+.scheduleFormContainer {
+  background: #f8f9fa;
+  border: 2px solid #3498db;
+  border-radius: 16px;
+  margin-top: 2rem;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(52, 152, 219, 0.15);
+}
+
+.scheduleFormHeader {
+  background: #3498db;
+  color: white;
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.scheduleFormHeader h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.scheduleForm {
+  padding: 2rem;
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.formGroup label {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.9rem;
+}
+
+.formGroup input,
+.formGroup textarea {
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s ease;
+}
+
+.formGroup input:focus,
+.formGroup textarea:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.formGroup textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e9ecef;
+}
+
+.cancelButton {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.cancelButton:hover {
+  background: #5a6268;
+}
+
+.createButton {
+  background: #28a745;
+  color: rgb(13, 6, 6);
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  min-width: 150px;
+}
+
+.createButton:hover:not(:disabled) {
+  background: #218838;
+}
+
+.createButton:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Модальное окно */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 1rem;
+}
+
+.modal {
+  background: white;
+  border-radius: 16px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modalHeader {
+  background: #f8f9fa;
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.3rem;
+}
+
+.modalContent {
+  padding: 1.5rem;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.certificateInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.infoRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.infoLabel {
+  font-weight: 600;
+  color: #495057;
+  font-size: 0.9rem;
+}
+
+.infoValue {
+  color: #2c3e50;
+  font-size: 1rem;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #3498db;
+}
+
+.fileLink {
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.fileLink:hover {
+  color: #2980b9;
+  text-decoration: underline;
+}
+
+.modalActions {
+  padding: 1.5rem;
+  background: #f8f9fa;
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  border-top: 1px solid #e9ecef;
+}
+
+.approveButton {
+  background: #27ae60;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  min-width: 120px;
+}
+
+.approveButton:hover:not(:disabled) {
+  background: #229954;
+  transform: translateY(-1px);
+}
+
+.approveButton:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.rejectButton {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  min-width: 120px;
+}
+
+.rejectButton:hover:not(:disabled) {
+  background: #c0392b;
+  transform: translateY(-1px);
+}
+
+.rejectButton:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .header {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .title {
+    font-size: 1.5rem;
+  }
+
+  .headerActions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .notificationsDropdown {
+    min-width: 300px;
+    right: -50px;
+  }
+
+  .main {
+    padding: 1rem;
+  }
+
+  .welcomeCard {
+    padding: 1.5rem;
+  }
+
+  .modal {
+    margin: 1rem;
+    max-height: 90vh;
+  }
+
+  .modalActions {
+    flex-direction: column;
+  }
+
+  .approveButton,
+  .rejectButton {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .notificationsDropdown {
+    min-width: 280px;
+    right: -100px;
+  }
+
+  .notificationItem {
+    padding: 0.75rem;
+  }
+
+  .notificationType {
+    font-size: 1.2rem;
+    margin-right: 0.75rem;
+  }
+}
+
+/* Стили для кнопок расписания */
+.cancelButton {
+  background: #6c757d;
+  color: #000 !important; /* Черный цвет шрифта */
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  margin-right: 10px;
+}
+
+.cancelButton:hover {
+  background: #5a6268;
+  color: #000 !important; /* Черный цвет шрифта при hover */
+}
+
+.createButton {
+  background: #007bff;
+  color: #000 !important; /* Черный цвет шрифта */
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.createButton:hover {
+  background: #0056b3;
+  color: #000 !important; /* Черный цвет шрифта при hover */
+}
+
+.createButton:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  color: #000 !important; /* Черный цвет шрифта для disabled */
+}
+
+/* Стили для табов в админ панели */
+.tab {
+  background: rgba(255, 255, 255, 0.1);
+  color: #000 !important; /* Всегда черный цвет текста */
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 12px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #000 !important; /* Черный цвет при hover */
+  transform: translateY(-1px);
+}
+
+.activeTab {
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: #000 !important; /* Черный цвет для активной вкладки */
+  border-color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+}
+
+.tabBadge {
+  background: #dc3545;
+  color: white !important;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 5px;
+}
+
+/* Стили для существующих тренировок */
+.existingTrainings {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 1px solid #e9ecef;
+}
+
+.existingTrainings h3 {
+  color: #2c3e50;
+  margin-bottom: 1rem;
+}
+
+.trainingsList {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+.trainingCard {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s ease;
+}
+
+.trainingCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.trainingInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.trainingDate {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 1rem;
+}
+
+.trainingTime {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.trainingStatus {
+  color: #28a745;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.trainingActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.editButton {
+  background: #ffc107;
+  color: #000;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.editButton:hover {
+  background: #e0a800;
+  transform: translateY(-1px);
+}

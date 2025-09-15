@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 // Базовый URL для API
+// Локальный Django API
 const API_BASE_URL = 'http://localhost:8000';
 
 // Создаем экземпляр axios с базовой конфигурацией
@@ -196,22 +197,247 @@ export const trainerAPI = {
       throw error.response?.data || { error: 'Ошибка сети' };
     }
   },
+
+  /**
+   * Получение комментариев тренера и списка детей
+   * @returns {Promise} - комментарии и список детей
+   */
+  getComments: async () => {
+    try {
+      const response = await api.get('/api/trainer/comments/');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Создание нового комментария
+   * @param {Object} commentData - данные комментария
+   * @param {number} commentData.child_id - ID ребенка
+   * @param {string} commentData.comment_text - текст комментария
+   * @returns {Promise} - результат создания
+   */
+  createComment: async (commentData) => {
+    try {
+      const response = await api.post('/api/trainer/comments/', commentData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
 };
 
 /**
  * API функции для администратора
  */
 export const adminAPI = {
-  // Здесь будут функции для администратора
-  // Например: управление пользователями, группами, тренерами
+  /**
+   * Получение всех справок о болезни
+   * @returns {Promise} - список всех справок
+   */
+  getMedicalCertificates: async () => {
+    try {
+      const response = await api.get('/api/admin/medical-certificates/');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Подтверждение справки о болезни
+   * @param {number} certificateId - ID справки
+   * @returns {Promise} - результат операции
+   */
+  approveMedicalCertificate: async (certificateId) => {
+    try {
+      const response = await api.post(`/api/admin/medical-certificates/${certificateId}/approve/`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Отклонение справки о болезни
+   * @param {number} certificateId - ID справки
+   * @returns {Promise} - результат операции
+   */
+  rejectMedicalCertificate: async (certificateId) => {
+    try {
+      const response = await api.post(`/api/admin/medical-certificates/${certificateId}/reject/`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Получение групп для составления расписания
+   * @returns {Promise} - список садов и групп
+   */
+  getGroupsForSchedule: async () => {
+    try {
+      const response = await api.get('/api/admin/schedule/');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Создание новой тренировки (одиночной или массовое создание)
+   * @param {Object} trainingData - данные о тренировке
+   * @returns {Promise} - результат создания
+   */
+  createTraining: async (trainingData) => {
+    try {
+      const response = await api.post('/api/admin/schedule/', trainingData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Массовое создание тренировок
+   * @param {Object} bulkData - данные для массового создания
+   * @returns {Promise} - результат создания
+   */
+  createBulkTrainings: async (bulkData) => {
+    try {
+      const response = await api.post('/api/admin/schedule/', {
+        ...bulkData,
+        bulk_create: true
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Обновление существующей тренировки
+   * @param {number} trainingId - ID тренировки
+   * @param {Object} trainingData - обновленные данные
+   * @returns {Promise} - результат обновления
+   */
+  updateTraining: async (trainingId, trainingData) => {
+    try {
+      const response = await api.put(`/api/admin/schedule/${trainingId}/`, trainingData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
 };
 
 /**
  * API функции для родителя
  */
 export const parentAPI = {
-  // Здесь будут функции для родителя
-  // Например: просмотр информации о ребенке, посещаемости
+  /**
+   * Получение информации о ребенке родителя
+   * @returns {Promise} - информация о ребенке
+   */
+  getChildInfo: async () => {
+    try {
+      const response = await api.get('/api/parent/child-info/');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Получение посещаемости ребенка
+   * @param {number} month - месяц (1-12)
+   * @param {number} year - год
+   * @returns {Promise} - данные о посещаемости
+   */
+  getAttendance: async (month = null, year = null) => {
+    try {
+      const params = new URLSearchParams();
+      if (month) params.append('month', month);
+      if (year) params.append('year', year);
+      
+      const response = await api.get(`/api/parent/attendance/?${params}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Получение информации о следующей тренировке
+   * @returns {Promise} - информация о следующей тренировке
+   */
+  getNextTraining: async () => {
+    try {
+      const response = await api.get('/api/parent/next-training/');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Получение комментариев тренера о ребенке
+   * @returns {Promise} - комментарии тренера
+   */
+  getComments: async () => {
+    try {
+      const response = await api.get('/api/parent/comments/');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Получение справок о болезни ребенка
+   * @returns {Promise} - список справок
+   */
+  getMedicalCertificates: async () => {
+    try {
+      const response = await api.get('/api/parent/medical-certificates/');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Загрузка справки о болезни
+   * @param {FormData} formData - данные формы с файлом
+   * @returns {Promise} - результат загрузки
+   */
+  uploadMedicalCertificate: async (formData) => {
+    try {
+      const response = await api.post('/api/parent/medical-certificates/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Получение расчета суммы к оплате
+   * @returns {Promise} - данные о сумме к оплате
+   */
+  getPaymentCalculation: async () => {
+    try {
+      const response = await api.get('/api/parent/payment-calculation/');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
 };
 
 /**
@@ -272,6 +498,81 @@ export const apiUtils = {
       return error.message;
     }
     return 'Произошла неизвестная ошибка';
+  },
+};
+
+/**
+ * Универсальная функция для выполнения API запросов
+ * @param {string} url - URL endpoint
+ * @param {string} method - HTTP метод
+ * @param {Object} data - данные для отправки (опционально)
+ * @returns {Promise} - ответ от API
+ */
+export const apiRequest = async (url, method = 'GET', data = null) => {
+  try {
+    const config = {
+      method: method.toLowerCase(),
+      url: url,
+    };
+    
+    if (data) {
+      if (method.toLowerCase() === 'get') {
+        config.params = data;
+      } else {
+        config.data = data;
+      }
+    }
+    
+    const response = await api(config);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || { error: 'Ошибка сети' };
+  }
+};
+
+/**
+ * API функции для расписания (для всех ролей)
+ */
+export const scheduleAPI = {
+  /**
+   * Получение расписания тренировок
+   * @returns {Promise} - список тренировок
+   */
+  getSchedule: async () => {
+    try {
+      const response = await api.get('/api/schedule/');
+      // API возвращает {trainings: [...], count: N}, но нам нужен массив
+      return response.data.trainings || [];
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Получение уведомлений об изменениях расписания
+   * @returns {Promise} - список уведомлений
+   */
+  getNotifications: async () => {
+    try {
+      const response = await api.get('/api/schedule/notifications/');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Отметить уведомление как прочитанное
+   * @param {number} notificationId - ID уведомления
+   * @returns {Promise} - результат операции
+   */
+  markNotificationAsRead: async (notificationId) => {
+    try {
+      const response = await api.post(`/api/schedule/notifications/${notificationId}/read/`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
   },
 };
 

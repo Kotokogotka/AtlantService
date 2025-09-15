@@ -294,10 +294,268 @@ npm start
    - Логин: `trainer2`
    - Пароль: `password123`
 
+### API для родителя
+
+#### GET /api/parent/child-info/
+**Описание:** Получение информации о ребенке родителя
+**Заголовки:** `Authorization: Bearer <token>`
+**Ответ:**
+```json
+{
+  "success": true,
+  "child": {
+    "id": 1,
+    "full_name": "Иванов Алексей Сергеевич",
+    "birth_date": "2018-05-15",
+    "is_active": true,
+    "group": {
+      "id": 1,
+      "name": "Старшая группа",
+      "kindergarten_number": 15,
+      "age_level": "Старшая"
+    }
+  }
+}
+```
+
+#### GET /api/parent/attendance/
+**Описание:** Получение посещаемости ребенка
+**Заголовки:** `Authorization: Bearer <token>`
+**Параметры запроса:**
+- `month` (int, optional) - месяц (1-12), по умолчанию текущий месяц
+- `year` (int, optional) - год, по умолчанию текущий год
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "child": {
+    "id": 1,
+    "full_name": "Иванов Алексей Сергеевич",
+    "group_name": "Старшая группа"
+  },
+  "attendance_stats": {
+    "total_training_days": 12,
+    "attended_days": 10,
+    "missed_days": 2,
+    "attendance_percentage": 83.3
+  },
+  "attendance_records": [
+    {
+      "date": "2024-01-15",
+      "status": true,
+      "reason": null,
+      "group_name": "Старшая группа"
+    },
+    {
+      "date": "2024-01-17",
+      "status": false,
+      "reason": "Болел",
+      "group_name": "Старшая группа"
+    }
+  ],
+  "period": {
+    "month": 1,
+    "year": 2024
+  }
+}
+```
+
+#### GET /api/parent/next-training/
+**Описание:** Получение информации о следующей тренировке
+**Заголовки:** `Authorization: Bearer <token>`
+**Ответ:**
+```json
+{
+  "success": true,
+  "next_training": {
+    "group": {
+      "id": 1,
+      "name": "Старшая группа",
+      "kindergarten_number": 15,
+      "age_level": "Старшая"
+    },
+    "message": "Расписание тренировок будет доступно в ближайшее время"
+  }
+}
+```
+
+#### GET /api/parent/comments/
+**Описание:** Получение комментариев тренера о ребенке
+**Заголовки:** `Authorization: Bearer <token>`
+**Ответ:**
+```json
+{
+  "success": true,
+  "comments": [
+    {
+      "id": 1,
+      "date": "2024-01-15",
+      "trainer_name": "Иванов И.И.",
+      "comment": "Ребенок хорошо занимается, показывает прогресс в координации движений.",
+      "type": "positive"
+    },
+    {
+      "id": 2,
+      "date": "2024-01-10",
+      "trainer_name": "Иванов И.И.",
+      "comment": "Рекомендую больше внимания уделить растяжке.",
+      "type": "recommendation"
+    }
+  ],
+  "message": "Функция комментариев будет доступна после реализации в кабинете тренера"
+}
+```
+
+## API для справок о болезни
+
+### GET /api/parent/payment-calculation/
+Получение расчета предварительной суммы к оплате за текущий месяц.
+
+**Заголовки:**
+- `Authorization: Bearer <token>`
+
+**Ответ:**
+```json
+{
+  "month": 9,
+  "year": 2025,
+  "total_trainings": 8,
+  "attended_trainings": 2,
+  "missed_trainings": 6,
+  "excused_days": 4,
+  "unexcused_missed": 2,
+  "cost_per_lesson": 500.0,
+  "amount_to_pay": 1000.0
+}
+```
+
+**Поля ответа:**
+- `month` - номер месяца
+- `year` - год
+- `total_trainings` - общее количество тренировок в месяце
+- `attended_trainings` - количество посещенных тренировок
+- `missed_trainings` - количество пропущенных тренировок
+- `excused_days` - количество дней с уважительной причиной (одобренные справки)
+- `unexcused_missed` - количество пропусков без уважительной причины
+- `cost_per_lesson` - стоимость одного занятия
+- `amount_to_pay` - сумма к доплате
+
+### GET /api/parent/medical-certificates/
+Получение списка справок о болезни ребенка родителя.
+
+**Заголовки:**
+- `Authorization: Bearer <token>`
+
+**Ответ:**
+```json
+{
+  "certificates": [
+    {
+      "id": 1,
+      "date_from": "01.01.2025",
+      "date_to": "05.01.2025",
+      "note": "Дополнительная информация",
+      "absence_reason": "ОРВИ, высокая температура",
+      "uploaded_at": "06.01.2025 14:30",
+      "status": "На рассмотрении",
+      "status_code": "pending",
+      "admin_comment": null,
+      "cost_per_lesson": 500.0,
+      "total_cost": 2500.0,
+      "file_url": "/media/medical_certificates/2025/01/06/certificate.pdf",
+      "file_name": "certificate.pdf"
+    }
+  ],
+  "child_name": "Иванов Алексей Сергеевич"
+}
+```
+
+### POST /api/parent/medical-certificates/
+Загрузка справки о болезни или запрос на перерасчет.
+
+**Заголовки:**
+- `Authorization: Bearer <token>`
+- `Content-Type: multipart/form-data`
+
+**Параметры:**
+- `date_from` (string, обязательный) - дата начала болезни/отсутствия (YYYY-MM-DD)
+- `date_to` (string, обязательный) - дата окончания болезни/отсутствия (YYYY-MM-DD)
+- `note` (string, необязательный) - примечание (для обычной справки)
+- `absence_reason` (string, необязательный) - причина отсутствия для перерасчета (для запроса на перерасчет)
+- `certificate_file` (file, необязательный) - файл справки (обязателен для обычной справки, необязателен для запроса на перерасчет)
+
+**Ответ:**
+```json
+{
+  "message": "Справка успешно загружена",
+  "certificate_id": 1
+}
+```
+
+### GET /api/admin/medical-certificates/
+Получение всех справок для администратора.
+
+**Заголовки:**
+- `Authorization: Bearer <token>`
+
+**Ответ:**
+```json
+{
+  "certificates": [
+    {
+      "id": 1,
+      "child_name": "Иванов Алексей Сергеевич",
+      "parent_name": "parent",
+      "date_from": "01.01.2025",
+      "date_to": "05.01.2025",
+      "note": "Дополнительная информация",
+      "absence_reason": "ОРВИ, высокая температура",
+      "uploaded_at": "06.01.2025 14:30",
+      "status": "На рассмотрении",
+      "status_code": "pending",
+      "admin_comment": null,
+      "cost_per_lesson": 500.0,
+      "total_cost": 2500.0,
+      "file_url": "/media/medical_certificates/2025/01/06/certificate.pdf",
+      "file_name": "certificate.pdf"
+    }
+  ]
+}
+```
+
+## Создание тестовых данных
+
+### Для тренера:
+```bash
+cd core
+python manage.py create_test_user
+```
+
+### Для родителя:
+```bash
+cd core
+python manage.py create_test_parent
+```
+
+## Тестовые учетные записи
+
+После создания тестовых данных доступны:
+
+1. **Тренер:**
+   - Логин: `trainer`
+   - Пароль: `trainer123`
+
+2. **Родитель:**
+   - Логин: `parent`
+   - Пароль: `parent123`
+
 ## Особенности реализации
 
 1. **JWT аутентификация** - безопасная аутентификация без состояния
 2. **Автоматическое управление токенами** - интерцепторы axios
 3. **Обработка ошибок** - централизованная обработка ошибок API
 4. **Responsive дизайн** - адаптивный интерфейс для мобильных устройств
-5. **Модульная архитектура** - разделение API по функциональности 
+5. **Модульная архитектура** - разделение API по функциональности
+6. **Кабинет родителя** - полный функционал просмотра посещаемости и информации о ребенке
+7. **Справки о болезни** - загрузка и просмотр медицинских справок родителями 

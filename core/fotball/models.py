@@ -151,13 +151,13 @@ class GroupKidGarden(models.Model):
     """
     Группа детского сада.
 
-    Описывает группу в детском саду с указанием возрастной категории и привязанного тренера.
+    Описывает группу в детском саду с указанием возрастной категории.
+    Тренеры назначаются через связь ManyToMany в модели Trainer.
 
     Поля:
         name (str): Название группы.
         kindergarten_number (str): Номер детского сада.
         age_level (str): Возрастная категория (младшая, средняя, старшая).
-        trainer (Trainer): Тренер, ведущий занятия в группе.
     """
     AGE_LEVELS = [
         ('S', 'Младшая'),
@@ -168,10 +168,14 @@ class GroupKidGarden(models.Model):
     name = models.CharField(max_length=100, verbose_name="Название группы")
     kindergarten_number = models.CharField(max_length=20, verbose_name="Номер сада")
     age_level = models.CharField(max_length=1, choices=AGE_LEVELS, verbose_name="Возрастная группа")
-    trainer = models.ForeignKey('Trainer', on_delete=models.SET_NULL, null=True, related_name='assigned_groups', verbose_name="Тренер в групе")
 
     def __str__(self):
         return f"{self.name}"
+    
+    def get_primary_trainer(self):
+        """Получить основного тренера группы (первого из списка)"""
+        trainers = self.trainers.all()
+        return trainers.first() if trainers.exists() else None
     
 class Parent(models.Model):
     """
@@ -258,3 +262,200 @@ class TrainingRate(models.Model):
 
     def __str__(self):
         return f"{self.group.name}: {self.price}руб. с {self.active_form}"
+
+
+class MedicalCertificate(models.Model):
+    """
+    Справка о болезни ребенка.
+
+    Содержит информацию о загруженной справке от родителя.
+
+    Поля:
+        child (Child): Ребёнок.
+        parent (User): Родитель, загрузивший справку.
+        certificate_file (FileField): Файл справки.
+        date_from (date): Дата начала болезни.
+        date_to (date): Дата окончания болезни.
+        note (str): Примечание.
+        absence_reason (str): Причина отсутствия для перерасчета.
+        uploaded_at (datetime): Дата загрузки.
+        status (str): Статус справки (pending, approved, rejected).
+        admin_comment (str): Комментарий администратора.
+        cost_per_lesson (Decimal): Стоимость одного занятия.
+        total_cost (Decimal): Общая стоимость к оплате.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'На рассмотрении'),
+        ('approved', 'Одобрена'),
+        ('rejected', 'Отклонена')
+    ]
+
+    child = models.ForeignKey(Child, on_delete=models.CASCADE, related_name='medical_certificates', verbose_name="Ребенок")
+    parent = models.ForeignKey(User, on_delete=models.CASCADE, related_name='uploaded_certificates', verbose_name="Родитель")
+    certificate_file = models.FileField(upload_to='medical_certificates/%Y/%m/%d/', verbose_name="Файл справки", null=True, blank=True)
+    date_from = models.DateField(verbose_name="Дата начала болезни")
+    date_to = models.DateField(verbose_name="Дата окончания болезни")
+    note = models.TextField(verbose_name="Примечание", help_text="Дополнительная информация", blank=True, default='')
+    absence_reason = models.TextField(verbose_name="Причина отсутствия", help_text="Описание причины отсутствия для перерасчета", default='')
+    uploaded_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата загрузки")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending', verbose_name="Статус")
+    admin_comment = models.TextField(null=True, blank=True, verbose_name="Комментарий администратора")
+    cost_per_lesson = models.DecimalField(max_digits=10, decimal_places=2, default=500.00, verbose_name="Стоимость одного занятия")
+    total_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Общая стоимость к оплате")
+
+    def save(self, *args, **kwargs):
+        # Автоматически рассчитываем общую стоимость
+        if self.date_from and self.date_to:
+            # Преобразуем строки в объекты date если необходимо
+            if isinstance(self.date_from, str):
+                from datetime import datetime
+                self.date_from = datetime.strptime(self.date_from, '%Y-%m-%d').date()
+            if isinstance(self.date_to, str):
+                from datetime import datetime
+                self.date_to = datetime.strptime(self.date_to, '%Y-%m-%d').date()
+            
+            days_absent = (self.date_to - self.date_from).days + 1
+            # Ограничиваем максимальное количество дней (например, 365 дней)
+            days_absent = min(days_absent, 365)
+            self.total_cost = self.cost_per_lesson * days_absent
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Справка {self.child.full_name} от {self.uploaded_at.strftime('%d.%m.%Y')}"
+
+    class Meta:
+        verbose_name = "Справка о болезни"
+        verbose_name_plural = "Справки о болезнях"
+        ordering = ['-uploaded_at']
+
+
+class TrainingSchedule(models.Model):
+    """
+    Расписание тренировок.
+
+    Содержит информацию о запланированных тренировках для групп.
+
+    Поля:
+        group (GroupKidGarden): Группа.
+        date (date): Дата тренировки.
+        time (time): Время тренировки.
+        duration_minutes (int): Продолжительность в минутах.
+        location (str): Место проведения.
+        trainer (Trainer): Тренер.
+        status (str): Статус тренировки (scheduled, completed, cancelled).
+        notes (str): Дополнительные заметки.
+        created_by (User): Администратор, создавший тренировку.
+        created_at (datetime): Дата создания записи.
+        updated_at (datetime): Дата последнего изменения.
+    """
+    STATUS_CHOICES = [
+        ('scheduled', 'Запланирована'),
+        ('completed', 'Проведена'),
+        ('cancelled', 'Отменена')
+    ]
+
+    group = models.ForeignKey(GroupKidGarden, on_delete=models.CASCADE, related_name='scheduled_trainings', verbose_name="Группа")
+    date = models.DateField(verbose_name="Дата тренировки")
+    time = models.TimeField(verbose_name="Время тренировки")
+    duration_minutes = models.PositiveIntegerField(default=40, verbose_name="Продолжительность (минуты)")
+    location = models.CharField(max_length=200, blank=True, default='', verbose_name="Место проведения")
+    trainer = models.ForeignKey(Trainer, on_delete=models.CASCADE, related_name='scheduled_trainings', verbose_name="Тренер")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='scheduled', verbose_name="Статус")
+    notes = models.TextField(blank=True, default='', verbose_name="Заметки")
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_trainings', verbose_name="Создано администратором")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата изменения")
+
+    def __str__(self):
+        return f"{self.group.name} - {self.date.strftime('%d.%m.%Y')} в {self.time.strftime('%H:%M')}"
+
+    class Meta:
+        verbose_name = "Тренировка"
+        verbose_name_plural = "Расписание тренировок"
+        ordering = ['date', 'time']
+        unique_together = ['group', 'date', 'time']  # Предотвращаем дублирование
+
+
+class TrainerComment(models.Model):
+    """
+    Комментарии тренера о ребенке.
+    
+    Тренер может оставлять комментарии о прогрессе, поведении или других аспектах.
+    """
+    trainer = models.ForeignKey(Trainer, on_delete=models.CASCADE, related_name='comments', verbose_name="Тренер")
+    child = models.ForeignKey(Child, on_delete=models.CASCADE, related_name='trainer_comments', verbose_name="Ребенок")
+    comment_text = models.TextField(verbose_name="Комментарий")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата изменения")
+    
+    def __str__(self):
+        return f"Комментарий для {self.child.full_name} от {self.trainer.full_name}"
+    
+    class Meta:
+        verbose_name = "Комментарий тренера"
+        verbose_name_plural = "Комментарии тренеров"
+        ordering = ['-created_at']
+
+
+class ScheduleChangeNotification(models.Model):
+    """
+    Уведомления об изменениях в расписании.
+    
+    Создается автоматически при изменении даты/времени тренировки.
+    """
+    NOTIFICATION_TYPES = [
+        ('date_changed', 'Изменена дата'),
+        ('time_changed', 'Изменено время'),
+        ('both_changed', 'Изменены дата и время'),
+        ('cancelled', 'Тренировка отменена')
+    ]
+
+    training = models.ForeignKey(TrainingSchedule, on_delete=models.CASCADE, related_name='change_notifications', verbose_name="Тренировка")
+    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES, verbose_name="Тип изменения")
+    old_date = models.DateField(null=True, blank=True, verbose_name="Старая дата")
+    new_date = models.DateField(null=True, blank=True, verbose_name="Новая дата")
+    old_time = models.TimeField(null=True, blank=True, verbose_name="Старое время")
+    new_time = models.TimeField(null=True, blank=True, verbose_name="Новое время")
+    message = models.TextField(verbose_name="Сообщение для пользователей")
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_notifications', verbose_name="Создано администратором")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
+    is_read_by_trainer = models.BooleanField(default=False, verbose_name="Прочитано тренером")
+    
+    def __str__(self):
+        return f"Изменение тренировки {self.training.group.name} - {self.get_notification_type_display()}"
+    
+    def get_affected_parents(self):
+        """Получить родителей, которых касается это изменение"""
+        return User.objects.filter(
+            role='parent',
+            linked_child__group=self.training.group,
+            linked_child__is_active=True
+        )
+    
+    def get_affected_trainers(self):
+        """Получить тренеров, которых касается это изменение"""
+        return User.objects.filter(
+            role='trainer',
+            linked_trainer=self.training.trainer
+        )
+    
+        class Meta:
+            verbose_name = "Уведомление об изменении расписания"
+            verbose_name_plural = "Уведомления об изменениях расписания"
+            ordering = ['-created_at']
+
+
+class NotificationRead(models.Model):
+    """Модель для отслеживания прочитанных уведомлений пользователями"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Пользователь")
+    notification = models.ForeignKey(ScheduleChangeNotification, on_delete=models.CASCADE, verbose_name="Уведомление")
+    read_at = models.DateTimeField(auto_now_add=True, verbose_name="Время прочтения")
+    
+    class Meta:
+        unique_together = ('user', 'notification')
+        verbose_name = "Прочитанное уведомление"
+        verbose_name_plural = "Прочитанные уведомления"
+        ordering = ['-read_at']
+    
+    def __str__(self):
+        return f"{self.user.username} прочитал уведомление {self.notification.id}"
