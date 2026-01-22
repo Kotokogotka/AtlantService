@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Child, Trainer, GroupKidGarden, Attendance, User, Parent, TrainingRate, MedicalCertificate, TrainingSchedule, TrainerComment, ScheduleChangeNotification, NotificationRead
+from .models import Child, Trainer, GroupKidGarden, Attendance, User, Parent, TrainingRate, MedicalCertificate, TrainingSchedule, TrainerComment, ScheduleChangeNotification, NotificationRead, PaymentSettings, PaymentInvoice, TrainingCancellationNotification
 
 
 @admin.register(User)
@@ -263,4 +263,103 @@ class NotificationReadAdmin(admin.ModelAdmin):
     def notification_preview(self, obj):
         return f"{obj.notification.training.group.name} - {obj.notification.get_notification_type_display()}"
     notification_preview.short_description = 'Уведомление'
+
+
+@admin.register(PaymentSettings)
+class PaymentSettingsAdmin(admin.ModelAdmin):
+    list_display = ('kindergarten', 'price_per_training', 'default_trainings_per_month', 'invoice_generation_day', 'is_active')
+    list_filter = ('is_active', 'created_at')
+    search_fields = ('kindergarten__name', 'kindergarten__kindergarten_number')
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('kindergarten', 'price_per_training', 'default_trainings_per_month')
+        }),
+        ('Настройки выставления счетов', {
+            'fields': ('invoice_generation_day', 'is_active')
+        }),
+        ('Системная информация', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(PaymentInvoice)
+class PaymentInvoiceAdmin(admin.ModelAdmin):
+    list_display = ('child', 'invoice_month_display', 'total_trainings', 'confirmed_absences', 'billable_trainings', 'total_amount', 'status', 'generated_at')
+    list_filter = ('status', 'invoice_month', 'generated_at', 'child__group')
+    search_fields = ('child__full_name', 'child__parent_name__full_name')
+    readonly_fields = ('billable_trainings', 'total_amount', 'generated_at')
+    date_hierarchy = 'invoice_month'
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('child', 'invoice_month', 'due_date')
+        }),
+        ('Расчет стоимости', {
+            'fields': ('total_trainings', 'confirmed_absences', 'billable_trainings', 'price_per_training', 'total_amount')
+        }),
+        ('Статус оплаты', {
+            'fields': ('status', 'paid_at', 'notes')
+        }),
+        ('Системная информация', {
+            'fields': ('generated_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def invoice_month_display(self, obj):
+        months_ru = [
+            'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+            'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+        ]
+        return f"{months_ru[obj.invoice_month.month - 1]} {obj.invoice_month.year}"
+    invoice_month_display.short_description = 'Месяц счета'
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('child', 'child__group', 'child__parent_name')
+    
+    actions = ['mark_as_paid', 'mark_as_overdue']
+    
+    def mark_as_paid(self, request, queryset):
+        from django.utils import timezone
+        updated = queryset.update(status='paid', paid_at=timezone.now())
+        self.message_user(request, f'Отмечено как оплачено: {updated} счетов.')
+    mark_as_paid.short_description = 'Отметить как оплаченные'
+    
+    def mark_as_overdue(self, request, queryset):
+        updated = queryset.update(status='overdue')
+        self.message_user(request, f'Отмечено как просроченные: {updated} счетов.')
+    mark_as_overdue.short_description = 'Отметить как просроченные'
+
+
+@admin.register(TrainingCancellationNotification)
+class TrainingCancellationNotificationAdmin(admin.ModelAdmin):
+    list_display = ('group', 'cancelled_date', 'cancelled_time', 'reason_short', 'created_by', 'created_at', 'is_read_by_trainer', 'is_read_by_parents', 'affects_payment')
+    list_filter = ('created_at', 'is_read_by_trainer', 'is_read_by_parents', 'affects_payment', 'group')
+    search_fields = ('group__name', 'reason', 'created_by__username')
+    readonly_fields = ('created_at',)
+    date_hierarchy = 'created_at'
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('group', 'cancelled_date', 'cancelled_time', 'reason')
+        }),
+        ('Статус прочтения', {
+            'fields': ('is_read_by_trainer', 'is_read_by_parents', 'affects_payment')
+        }),
+        ('Системная информация', {
+            'fields': ('created_by', 'created_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def reason_short(self, obj):
+        return obj.reason[:50] + '...' if len(obj.reason) > 50 else obj.reason
+    reason_short.short_description = 'Причина отмены'
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('group', 'created_by')
 

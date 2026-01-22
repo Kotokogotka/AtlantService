@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { parentAPI, scheduleAPI } from '../../utils/api';
+import { parentAPI, scheduleAPI, paymentAPI, cancellationNotificationsAPI } from '../../utils/api';
 import PopupNotification from '../PopupNotification/PopupNotification';
 import styles from './ParentDashboard.module.css';
 
@@ -23,15 +23,13 @@ function ParentDashboard({ userInfo, onLogout }) {
     absence_reason: '',
     certificate_file: null
   });
-  const [paymentData, setPaymentData] = useState(null);
   const [schedule, setSchedule] = useState([]);
   const [scheduleNotifications, setScheduleNotifications] = useState([]);
   const [showPopupNotifications, setShowPopupNotifications] = useState(true);
+  const [invoices, setInvoices] = useState([]);
+  const [activeTab, setActiveTab] = useState('main');
+  const [cancellationNotifications, setCancellationNotifications] = useState([]);
 
-  const months = [
-    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
-  ];
 
   const loadParentData = async () => {
     try {
@@ -39,11 +37,10 @@ function ParentDashboard({ userInfo, onLogout }) {
       setError(null);
 
       // Загружаем данные параллельно
-      const [childResponse, commentsResponse, certificatesResponse, paymentResponse] = await Promise.all([
+      const [childResponse, commentsResponse, certificatesResponse] = await Promise.all([
         parentAPI.getChildInfo(),
         parentAPI.getComments(),
-        parentAPI.getMedicalCertificates(),
-        parentAPI.getPaymentCalculation()
+        parentAPI.getMedicalCertificates()
       ]);
 
       if (childResponse && childResponse.success) {
@@ -58,10 +55,6 @@ function ParentDashboard({ userInfo, onLogout }) {
         setMedicalCertificates(certificatesResponse);
       }
 
-      if (paymentResponse) {
-        setPaymentData(paymentResponse);
-      }
-
     } catch (err) {
       console.error('Ошибка загрузки данных родителя:', err);
       setError('Ошибка загрузки данных. Попробуйте обновить страницу.');
@@ -69,6 +62,16 @@ function ParentDashboard({ userInfo, onLogout }) {
       setLoading(false);
     }
   };
+
+  // Загрузка счетов на оплату
+  const loadInvoices = useCallback(async () => {
+    try {
+      const response = await paymentAPI.getInvoices();
+      setInvoices(response.invoices || []);
+    } catch (err) {
+      console.error('Ошибка загрузки счетов:', err);
+    }
+  }, []);
 
 
   const loadSchedule = useCallback(async () => {
@@ -101,6 +104,16 @@ function ParentDashboard({ userInfo, onLogout }) {
     }
   }, []);
 
+  // Загрузка уведомлений об отмене тренировок
+  const loadCancellationNotifications = useCallback(async () => {
+    try {
+      const response = await cancellationNotificationsAPI.getNotifications();
+      setCancellationNotifications(response.notifications || []);
+    } catch (error) {
+      console.error('Ошибка при загрузке уведомлений об отмене:', error);
+    }
+  }, []);
+
   const handleNotificationMarkAsRead = (notificationId) => {
     setScheduleNotifications(prev => 
       prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
@@ -114,7 +127,9 @@ function ParentDashboard({ userInfo, onLogout }) {
   useEffect(() => {
     loadParentData();
     loadScheduleNotifications();
-  }, [loadScheduleNotifications]);
+    loadCancellationNotifications();
+    loadInvoices();
+  }, [loadScheduleNotifications, loadCancellationNotifications, loadInvoices]);
 
   useEffect(() => {
     if (childInfo) {
@@ -296,7 +311,7 @@ function ParentDashboard({ userInfo, onLogout }) {
       {/* Всплывающие уведомления */}
       {showPopupNotifications && (
         <PopupNotification
-          notifications={scheduleNotifications}
+          notifications={[...scheduleNotifications, ...cancellationNotifications]}
           onMarkAsRead={handleNotificationMarkAsRead}
           onClose={handleClosePopupNotifications}
         />
@@ -314,7 +329,21 @@ function ParentDashboard({ userInfo, onLogout }) {
       <div className={styles.main}>
       <h1>Кабинет родителя</h1>
 
-        {/* Убираем табы - оставляем только главную страницу */}
+        {/* Навигационные табы */}
+        <div className={styles.tabs}>
+          <button 
+            className={`${styles.tab} ${activeTab === 'main' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('main')}
+          >
+            Главная
+          </button>
+          <button 
+            className={`${styles.tab} ${activeTab === 'payment' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('payment')}
+          >
+            Оплата
+          </button>
+        </div>
 
         {error && (
           <div className={styles.error}>
@@ -326,6 +355,7 @@ function ParentDashboard({ userInfo, onLogout }) {
         )}
 
         {/* Основной контент */}
+        {activeTab === 'main' && (
         <div className={styles.dashboardGrid}>
             {/* Информация о ребенке */}
             <div className={styles.card}>
@@ -401,24 +431,6 @@ function ParentDashboard({ userInfo, onLogout }) {
                 )}
               </div>
             </div>
-
-            {/* Предварительная сумма к оплате */}
-            {paymentData && (
-              <div className={styles.card}>
-                <div className={styles.paymentCalculation}>
-                  <h3>Сумма к оплате за {months[paymentData.month - 1]} {paymentData.year}</h3>
-                  <div className={styles.paymentInfo}>
-                    <div>Всего тренировок: {paymentData.total_trainings}</div>
-                    <div>Посещено: {paymentData.attended_trainings}</div>
-                    <div>Пропущено: {paymentData.missed_trainings}</div>
-                    <div>С уважительной причиной: {paymentData.excused_absences}</div>
-                    <div>Без уважительной причины: {paymentData.unexcused_absences}</div>
-                    <div>Стоимость занятия: {paymentData.cost_per_lesson} ₽</div>
-                    <div className={styles.totalAmount}>К оплате: {paymentData.amount_to_pay} ₽</div>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Справки и перерасчет */}
             <div className={styles.card}>
@@ -587,8 +599,8 @@ function ParentDashboard({ userInfo, onLogout }) {
               )}
             </div>
 
-            {/* Комментарии от тренера - на всю ширину внизу */}
-            <div className={`${styles.card} ${styles.fullWidth}`}>
+            {/* Комментарии от тренера */}
+            <div className={styles.card}>
               <h3>Комментарии от тренера</h3>
               {comments && comments.length > 0 ? (
                 <div className={styles.commentsList}>
@@ -613,6 +625,105 @@ function ParentDashboard({ userInfo, onLogout }) {
               )}
             </div>
           </div>
+        )}
+
+        {/* Вкладка оплаты */}
+        {activeTab === 'payment' && (
+          <div className={styles.paymentContent}>
+            <div className={styles.card}>
+              <h3>Счета на оплату</h3>
+              {invoices && invoices.length > 0 ? (
+                <div className={styles.invoicesList}>
+                  {invoices.map((invoice, index) => (
+                    <div key={invoice.id} className={styles.invoiceItem}>
+                      <div className={styles.invoiceHeader}>
+                        <div className={styles.invoiceMonth}>
+                          {invoice.invoice_month_display}
+                        </div>
+                        <div className={`${styles.invoiceStatus} ${styles[invoice.status]}`}>
+                          {invoice.status_display}
+                        </div>
+                      </div>
+                      
+                      <div className={styles.invoiceDetails}>
+                        <div className={styles.invoiceRow}>
+                          <span>Всего тренировок:</span>
+                          <span>{invoice.total_trainings}</span>
+                        </div>
+                        
+                        <div className={styles.invoiceRow}>
+                          <span>Подтвержденные пропуски:</span>
+                          <span>{invoice.confirmed_absences}</span>
+                        </div>
+                        
+                        <div className={styles.invoiceRow}>
+                          <span>К оплате тренировок:</span>
+                          <span>{invoice.billable_trainings}</span>
+                        </div>
+                        
+                        <div className={styles.invoiceRow}>
+                          <span>Стоимость за тренировку:</span>
+                          <span>{invoice.price_per_training} ₽</span>
+                        </div>
+                        
+                        <div className={`${styles.invoiceRow} ${styles.totalRow}`}>
+                          <span>Итого к оплате:</span>
+                          <span className={styles.totalAmount}>{invoice.total_amount} ₽</span>
+                        </div>
+                        
+                        <div className={styles.invoiceRow}>
+                          <span>Срок оплаты:</span>
+                          <span>{new Date(invoice.due_date).toLocaleDateString('ru-RU')}</span>
+                        </div>
+                        
+                        {invoice.paid_at && (
+                          <div className={styles.invoiceRow}>
+                            <span>Дата оплаты:</span>
+                            <span>{new Date(invoice.paid_at).toLocaleDateString('ru-RU')}</span>
+                          </div>
+                        )}
+                        
+                        {invoice.notes && (
+                          <div className={styles.invoiceNotes}>
+                            <strong>Примечания:</strong> {invoice.notes}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className={styles.noData}>
+                  Счетов на оплату пока нет
+                </div>
+              )}
+            </div>
+
+            <div className={styles.card}>
+              <h3>Информация об оплате</h3>
+              <div className={styles.paymentInfo}>
+                <div className={styles.infoBlock}>
+                  <h4>Система оплаты</h4>
+                  <p>Мы перешли на систему предоплаты. Счета выставляются с 25 числа каждого месяца на следующий месяц.</p>
+                </div>
+                
+                <div className={styles.infoBlock}>
+                  <h4>Расчет стоимости</h4>
+                  <ul>
+                    <li>Если расписание составлено — оплата по количеству запланированных тренировок</li>
+                    <li>Если расписания нет — оплата за 8 тренировок (среднее количество)</li>
+                    <li>Подтвержденные пропуски по болезни вычитаются из суммы</li>
+                  </ul>
+                </div>
+                
+                <div className={styles.infoBlock}>
+                  <h4>Справки о болезни</h4>
+                  <p>Для получения перерасчета загрузите справку о болезни в разделе "Главная" → "Справки и перерасчеты".</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

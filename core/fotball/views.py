@@ -9,9 +9,10 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import check_password
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from datetime import date
+from datetime import date, datetime, timedelta
 
-from .models import User, GroupKidGarden, Attendance, Child, MedicalCertificate, TrainingSchedule, Trainer, TrainerComment, ScheduleChangeNotification, NotificationRead
+from .models import User, GroupKidGarden, Attendance, Child, MedicalCertificate, TrainingSchedule, Trainer, TrainerComment, ScheduleChangeNotification, NotificationRead, PaymentInvoice, PaymentSettings, TrainingCancellationNotification, Parent
+from .payment_service import PaymentService
 
 
 class TestView(APIView):
@@ -1678,6 +1679,400 @@ class AdminScheduleApiView(APIView):
                 'error': 'Внутренняя ошибка сервера'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def delete(self, request, training_id):
+        """Удалить тренировку"""
+        try:
+            user = request.user
+            
+            if user.role != 'admin':
+                return Response({
+                    'error': 'Доступ запрещен'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Получаем тренировку
+            try:
+                training = TrainingSchedule.objects.get(id=training_id)
+            except TrainingSchedule.DoesNotExist:
+                return Response({
+                    'error': 'Тренировка не найдена'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Сохраняем информацию о тренировке для уведомления
+            training_info = {
+                'group_name': training.group.name,
+                'date': training.date.strftime('%d.%m.%Y'),
+                'time': training.time.strftime('%H:%M'),
+                'trainer_name': training.trainer.full_name
+            }
+
+            # Удаляем тренировку
+            training.delete()
+
+            # Создаем уведомление об удалении для тренера
+            try:
+                ScheduleChangeNotification.objects.create(
+                    training=None,  # Тренировка уже удалена
+                    notification_type='deleted',
+                    message=f"Тренировка для группы {training_info['group_name']} на {training_info['date']} в {training_info['time']} была удалена администратором.",
+                    created_by=user,
+                    old_date=training.date,
+                    old_time=training.time
+                )
+            except Exception as notification_error:
+                print(f"Ошибка при создании уведомления об удалении: {notification_error}")
+
+            # Создаем уведомление об отмене тренировки для тренера и родителей
+            try:
+                TrainingCancellationNotification.objects.create(
+                    group=training.group,
+                    cancelled_date=training.date,
+                    cancelled_time=training.time,
+                    reason="Тренировка отменена администратором",
+                    created_by=user,
+                    affects_payment=True
+                )
+            except Exception as cancellation_error:
+                print(f"Ошибка при создании уведомления об отмене: {cancellation_error}")
+
+            return Response({
+                'message': 'Тренировка успешно удалена',
+                'deleted_training': training_info
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Ошибка при удалении тренировки: {e}")
+            return Response({
+                'error': 'Внутренняя ошибка сервера'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TrainingCancellationNotificationsApiView(APIView):
+    """API для получения уведомлений об отмене тренировок"""
+    
+    def get(self, request):
+        """Получить уведомления об отмене тренировок"""
+        try:
+            user = request.user
+            
+            if user.role == 'trainer':
+                # Тренер видит уведомления для своих групп
+                trainer = Trainer.objects.get(user=user)
+                notifications = TrainingCancellationNotification.objects.filter(
+                    group__trainer=trainer,
+                    is_read_by_trainer=False
+                ).order_by('-created_at')
+                
+                # Отмечаем как прочитанные
+                notifications.update(is_read_by_trainer=True)
+                
+            elif user.role == 'parent':
+                # Родитель видит уведомления для групп своих детей
+                parent = Parent.objects.get(user=user)
+                children = Child.objects.filter(parent=parent)
+                group_ids = children.values_list('group_id', flat=True)
+                
+                notifications = TrainingCancellationNotification.objects.filter(
+                    group_id__in=group_ids,
+                    is_read_by_parents=False
+                ).order_by('-created_at')
+                
+                # Отмечаем как прочитанные
+                notifications.update(is_read_by_parents=True)
+                
+            else:
+                return Response({'error': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
+            
+            notifications_data = []
+            for notification in notifications:
+                notifications_data.append({
+                    'id': notification.id,
+                    'group_name': notification.group.name,
+                    'cancelled_date': notification.cancelled_date.strftime('%d.%m.%Y'),
+                    'cancelled_time': notification.cancelled_time.strftime('%H:%M'),
+                    'reason': notification.reason,
+                    'created_at': notification.created_at.strftime('%d.%m.%Y %H:%M'),
+                    'affects_payment': notification.affects_payment
+                })
+            
+            return Response({
+                'notifications': notifications_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"Ошибка при получении уведомлений об отмене: {e}")
+            return Response({
+                'error': 'Ошибка при получении уведомлений'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AdminAttendanceApiView(APIView):
+    """API для получения данных о посещениях детей (для админа)"""
+    
+    def get(self, request):
+        """Получить данные о посещениях детей"""
+        try:
+            user = request.user
+            
+            if user.role != 'admin':
+                return Response({'error': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Получаем параметры фильтрации
+            group_id = request.GET.get('group_id')
+            child_id = request.GET.get('child_id')
+            date_from = request.GET.get('date_from')
+            date_to = request.GET.get('date_to')
+            
+            print(f"DEBUG: Фильтры посещаемости - group_id: {group_id}, child_id: {child_id}, date_from: {date_from}, date_to: {date_to}")
+            
+            # Базовый запрос для посещений
+            attendances_query = Attendance.objects.select_related(
+                'child', 'child__group'
+            ).all()
+            
+            # Фильтрация по группе
+            if group_id:
+                attendances_query = attendances_query.filter(child__group_id=group_id)
+            
+            # Фильтрация по ребенку
+            if child_id:
+                attendances_query = attendances_query.filter(child_id=child_id)
+            
+            # Фильтрация по дате
+            if date_from:
+                attendances_query = attendances_query.filter(date__gte=date_from)
+            if date_to:
+                attendances_query = attendances_query.filter(date__lte=date_to)
+            
+            # Получаем посещения
+            attendances = attendances_query.order_by('-date', 'child__full_name')
+            
+            # Группируем по детям
+            children_data = {}
+            for attendance in attendances:
+                child = attendance.child
+                if child.id not in children_data:
+                    children_data[child.id] = {
+                        'child_id': child.id,
+                        'child_name': child.full_name,
+                        'group_name': child.group.name,
+                        'kindergarten_name': f"Детский сад №{child.group.kindergarten_number}",
+                        'attendances': [],
+                        'total_trainings': 0,
+                        'attended_trainings': 0,
+                        'missed_trainings': 0,
+                        'confirmed_absences': 0,
+                        'payment_amount': 0
+                    }
+                
+                # Добавляем информацию о посещении
+                attendance_info = {
+                    'id': attendance.id,
+                    'date': attendance.date.strftime('%d.%m.%Y'),
+                    'time': '09:00',  # Время по умолчанию, так как в модели нет поля time
+                    'attended': attendance.status,
+                    'absence_reason': attendance.reason,
+                    'attendance_id': attendance.id
+                }
+                children_data[child.id]['attendances'].append(attendance_info)
+                children_data[child.id]['total_trainings'] += 1
+                
+                if attendance.status:
+                    children_data[child.id]['attended_trainings'] += 1
+                else:
+                    children_data[child.id]['missed_trainings'] += 1
+                    
+                    # Проверяем, есть ли подтвержденная справка
+                    if attendance.reason and MedicalCertificate.objects.filter(
+                        child=child,
+                        date_from__lte=attendance.date,
+                        date_to__gte=attendance.date,
+                        status='approved'
+                    ).exists():
+                        children_data[child.id]['confirmed_absences'] += 1
+            
+            # Рассчитываем оплату для каждого ребенка
+            for child_id, child_data in children_data.items():
+                # Получаем настройки оплаты для сада
+                try:
+                    # Извлекаем номер сада из названия
+                    kindergarten_number = child_data['kindergarten_name'].replace('Детский сад №', '')
+                    payment_settings = PaymentSettings.objects.filter(
+                        kindergarten__kindergarten_number=kindergarten_number,
+                        is_active=True
+                    ).order_by('-updated_at').first()
+                    
+                    if payment_settings:
+                        price_per_training = payment_settings.price_per_training
+                    else:
+                        price_per_training = 500.00  # Значение по умолчанию
+                except Exception as e:
+                    print(f"Ошибка при получении настроек оплаты: {e}")
+                    price_per_training = 500.00  # Значение по умолчанию
+                
+                # Рассчитываем сумму к оплате
+                billable_trainings = child_data['total_trainings'] - child_data['confirmed_absences']
+                child_data['payment_amount'] = float(billable_trainings * price_per_training)
+                child_data['price_per_training'] = float(price_per_training)
+            
+            return Response({
+                'children': list(children_data.values())
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"Ошибка при получении данных о посещениях: {e}")
+            return Response({
+                'error': 'Ошибка при получении данных о посещениях'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AdminAttendanceTableApiView(APIView):
+    """API для получения данных таблицы посещений (Excel формат)"""
+    
+    def get(self, request):
+        """Получить данные для таблицы посещений за месяц"""
+        try:
+            user = request.user
+            
+            if user.role != 'admin':
+                return Response({'error': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
+            
+            # Получаем месяц в формате YYYY-MM
+            month = request.GET.get('month')
+            if not month:
+                return Response({'error': 'Не указан месяц'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            print(f"DEBUG: Загрузка таблицы посещений для месяца: {month}")
+            
+            # Парсим месяц
+            try:
+                year, month_num = month.split('-')
+                year = int(year)
+                month_num = int(month_num)
+                
+                # Проверка корректности месяца
+                if month_num < 1 or month_num > 12:
+                    return Response({'error': 'Некорректный номер месяца'}, status=status.HTTP_400_BAD_REQUEST)
+                    
+            except ValueError:
+                return Response({'error': 'Неверный формат месяца'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Получаем все группы
+            groups = GroupKidGarden.objects.all()
+            if not groups.exists():
+                return Response({
+                    'children': [],
+                    'training_dates': []
+                }, status=status.HTTP_200_OK)
+            
+            # Получаем все тренировки за месяц
+            start_date = date(year, month_num, 1)
+            if month_num == 12:
+                end_date = date(year + 1, 1, 1) - timedelta(days=1)
+            else:
+                end_date = date(year, month_num + 1, 1) - timedelta(days=1)
+            
+            print(f"DEBUG: Период поиска: {start_date} - {end_date}")
+            
+            # Получаем расписание тренировок за месяц
+            training_dates = []
+            for group in groups:
+                # Получаем расписание для группы
+                group_schedule = TrainingSchedule.objects.filter(
+                    group=group,
+                    date__range=[start_date, end_date]
+                ).order_by('date')
+                
+                for schedule in group_schedule:
+                    if schedule.date not in training_dates:
+                        training_dates.append(schedule.date)
+            
+            training_dates.sort()
+            print(f"DEBUG: Найдено {len(training_dates)} дат тренировок: {training_dates}")
+            
+            # Получаем всех детей из всех групп
+            children_data = {}
+            total_children = 0
+            for group in groups:
+                children = Child.objects.filter(group=group).order_by('full_name')
+                print(f"DEBUG: Группа {group.name} - {children.count()} детей")
+                
+                for child in children:
+                    total_children += 1
+                    # Получаем посещения ребенка за месяц
+                    attendances = Attendance.objects.filter(
+                        child=child,
+                        date__range=[start_date, end_date]
+                    ).order_by('date')
+                    
+                    # Формируем данные о посещениях
+                    attendance_list = []
+                    for attendance in attendances:
+                        attendance_list.append({
+                            'date': attendance.date.strftime('%Y-%m-%d'),
+                            'attended': attendance.status,
+                            'absence_reason': attendance.reason or ''
+                        })
+                    
+                    children_data[child.id] = {
+                        'child_id': child.id,
+                        'child_name': child.full_name,
+                        'birth_date': child.birth_date.strftime('%Y-%m-%d') if child.birth_date else None,
+                        'group_name': group.name,
+                        'group_number': group.kindergarten_number,
+                        'attendances': attendance_list
+                    }
+            
+            print(f"DEBUG: Всего детей: {total_children}, уникальных дат: {len(training_dates)}")
+            
+            return Response({
+                'children': list(children_data.values()),
+                'training_dates': [date.strftime('%Y-%m-%d') for date in training_dates]
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"Ошибка при получении таблицы посещений: {e}")
+            return Response({
+                'error': 'Ошибка при получении таблицы посещений'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AdminGroupChildrenApiView(APIView):
+    """API для получения детей группы (для админа)"""
+    
+    def get(self, request):
+        """Получить детей группы"""
+        try:
+            user = request.user
+            
+            if user.role != 'admin':
+                return Response({'error': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
+            
+            group_id = request.GET.get('group_id')
+            if not group_id:
+                return Response({'error': 'Не указан ID группы'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Получаем детей группы
+            children = Child.objects.filter(group_id=group_id).select_related('group')
+            
+            children_data = []
+            for child in children:
+                children_data.append({
+                    'id': child.id,
+                    'full_name': child.full_name,
+                    'group_name': child.group.name,
+                    'kindergarten_name': f"Детский сад №{child.group.kindergarten_number}"
+                })
+            
+            return Response({
+                'children': children_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"Ошибка при получении детей группы: {e}")
+            return Response({
+                'error': 'Ошибка при получении детей группы'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class ScheduleApiView(APIView):
     """
@@ -1892,6 +2287,209 @@ class MarkNotificationReadApiView(APIView):
 
         except Exception as e:
             print(f"Ошибка при отметке уведомления как прочитанного: {e}")
+            return Response({
+                'error': 'Внутренняя ошибка сервера'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class PaymentInvoicesApiView(APIView):
+    """
+    API для работы с счетами на оплату.
+    
+    GET: Получить счета для родителя
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def format_month_ru(self, date_obj):
+        """Форматирует дату в русском формате месяца и года."""
+        months_ru = [
+            'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+            'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+        ]
+        return f"{months_ru[date_obj.month - 1]} {date_obj.year}"
+    
+    def get(self, request):
+        try:
+            user = request.user
+            
+            if user.role != 'parent':
+                return Response({
+                    'error': 'Доступ разрешен только родителям'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            if not user.linked_child:
+                return Response({
+                    'error': 'У пользователя нет привязанного ребенка'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Получаем все счета для ребенка, отсортированные по дате
+            invoices = PaymentInvoice.objects.filter(
+                child=user.linked_child
+            ).order_by('-invoice_month')
+            
+            invoices_data = []
+            for invoice in invoices:
+                invoices_data.append({
+                    'id': invoice.id,
+                    'invoice_month': invoice.invoice_month.strftime('%Y-%m-%d'),
+                    'invoice_month_display': self.format_month_ru(invoice.invoice_month),
+                    'total_trainings': invoice.total_trainings,
+                    'confirmed_absences': invoice.confirmed_absences,
+                    'billable_trainings': invoice.billable_trainings,
+                    'price_per_training': float(invoice.price_per_training),
+                    'total_amount': float(invoice.total_amount),
+                    'status': invoice.status,
+                    'status_display': invoice.get_status_display(),
+                    'generated_at': invoice.generated_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    'due_date': invoice.due_date.strftime('%Y-%m-%d'),
+                    'paid_at': invoice.paid_at.strftime('%Y-%m-%d %H:%M:%S') if invoice.paid_at else None,
+                    'notes': invoice.notes
+                })
+            
+            return Response({
+                'invoices': invoices_data,
+                'child_name': user.linked_child.full_name
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"Ошибка при получении счетов: {e}")
+            return Response({
+                'error': 'Внутренняя ошибка сервера'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GenerateInvoiceApiView(APIView):
+    """
+    API для генерации счетов (только для админов).
+    
+    POST: Сгенерировать счета на следующий месяц
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            user = request.user
+            
+            if user.role != 'admin':
+                return Response({
+                    'error': 'Доступ разрешен только администраторам'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # Генерируем счета на следующий месяц
+            target_month = PaymentService.get_next_month()
+            created_invoices = PaymentService.generate_invoices_for_month(target_month)
+            
+            return Response({
+                'message': f'Сгенерировано счетов: {len(created_invoices)}',
+                'target_month': target_month.strftime('%B %Y'),
+                'invoices_count': len(created_invoices)
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"Ошибка при генерации счетов: {e}")
+            return Response({
+                'error': 'Внутренняя ошибка сервера'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class PaymentSettingsApiView(APIView):
+    """
+    API для работы с настройками оплаты (только для админов).
+    
+    GET: Получить настройки оплаты
+    PUT: Обновить настройки оплаты
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            user = request.user
+            
+            if user.role != 'admin':
+                return Response({
+                    'error': 'Доступ разрешен только администраторам'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # Получаем все настройки оплаты
+            settings = PaymentSettings.objects.all().select_related('kindergarten')
+            
+            settings_data = []
+            for setting in settings:
+                settings_data.append({
+                    'id': setting.id,
+                    'kindergarten': {
+                        'id': setting.kindergarten.id,
+                        'name': setting.kindergarten.name,
+                        'kindergarten_number': setting.kindergarten.kindergarten_number
+                    },
+                    'price_per_training': float(setting.price_per_training),
+                    'default_trainings_per_month': setting.default_trainings_per_month,
+                    'invoice_generation_day': setting.invoice_generation_day,
+                    'is_active': setting.is_active,
+                    'created_at': setting.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    'updated_at': setting.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+                })
+            
+            return Response({
+                'settings': settings_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"Ошибка при получении настроек оплаты: {e}")
+            return Response({
+                'error': 'Внутренняя ошибка сервера'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def put(self, request):
+        try:
+            user = request.user
+            
+            if user.role != 'admin':
+                return Response({
+                    'error': 'Доступ разрешен только администраторам'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            setting_id = request.data.get('id')
+            if not setting_id:
+                return Response({
+                    'error': 'ID настройки обязателен'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                setting = PaymentSettings.objects.get(id=setting_id)
+            except PaymentSettings.DoesNotExist:
+                return Response({
+                    'error': 'Настройка не найдена'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Обновляем поля
+            if 'price_per_training' in request.data:
+                setting.price_per_training = request.data['price_per_training']
+            
+            if 'default_trainings_per_month' in request.data:
+                setting.default_trainings_per_month = request.data['default_trainings_per_month']
+            
+            if 'invoice_generation_day' in request.data:
+                setting.invoice_generation_day = request.data['invoice_generation_day']
+            
+            if 'is_active' in request.data:
+                setting.is_active = request.data['is_active']
+            
+            setting.save()
+            
+            return Response({
+                'message': 'Настройки обновлены',
+                'setting': {
+                    'id': setting.id,
+                    'price_per_training': float(setting.price_per_training),
+                    'default_trainings_per_month': setting.default_trainings_per_month,
+                    'invoice_generation_day': setting.invoice_generation_day,
+                    'is_active': setting.is_active
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"Ошибка при обновлении настроек оплаты: {e}")
             return Response({
                 'error': 'Внутренняя ошибка сервера'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

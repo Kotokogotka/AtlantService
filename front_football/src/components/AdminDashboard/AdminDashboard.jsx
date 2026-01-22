@@ -8,9 +8,16 @@ function AdminDashboard({ userInfo, onLogout }) {
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('notifications'); // 'notifications' или 'schedule'
+  const [activeTab, setActiveTab] = useState('notifications'); // 'notifications', 'schedule', 'attendance', 'attendance_table'
+  
+  // Состояние для таблицы посещений
+  const [attendanceTableData, setAttendanceTableData] = useState([]);
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [trainingDates, setTrainingDates] = useState([]);
+  const [tableLoading, setTableLoading] = useState(false);
   const [kindergartens, setKindergartens] = useState([]);
   const [selectedKindergarten, setSelectedKindergarten] = useState(null);
+  const [selectedAgeGroup, setSelectedAgeGroup] = useState(null);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [groupSchedule, setGroupSchedule] = useState([]);
@@ -23,6 +30,16 @@ function AdminDashboard({ userInfo, onLogout }) {
     location: '',
     notes: ''
   });
+  
+  // Состояния для вкладки посещений
+  const [attendanceData, setAttendanceData] = useState([]);
+  const [attendanceFilters, setAttendanceFilters] = useState({
+    groupId: '',
+    childId: '',
+    dateFrom: '',
+    dateTo: ''
+  });
+  const [children, setChildren] = useState([]);
   const [bulkScheduleForm, setBulkScheduleForm] = useState({
     start_date: '',
     end_date: '',
@@ -64,6 +81,267 @@ function AdminDashboard({ userInfo, onLogout }) {
       console.error('Ошибка загрузки расписания группы:', error);
     }
   }, []);
+
+  // Удаление тренировки
+  const handleDeleteTraining = async (trainingId) => {
+    if (!window.confirm('Вы уверены, что хотите удалить эту тренировку?')) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await adminAPI.deleteTraining(trainingId);
+      // Обновляем расписание группы
+      if (selectedGroup) {
+        await loadGroupSchedule(selectedGroup.id);
+      }
+      alert('Тренировка успешно удалена');
+    } catch (error) {
+      console.error('Ошибка удаления тренировки:', error);
+      alert('Ошибка при удалении тренировки: ' + (error.error || 'Неизвестная ошибка'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Функции для работы с посещениями
+  const loadAttendanceData = async () => {
+    setLoading(true);
+    try {
+      const response = await adminAPI.getAttendanceData(attendanceFilters);
+      setAttendanceData(response.children || []);
+    } catch (error) {
+      console.error('Ошибка загрузки данных о посещениях:', error);
+      alert('Ошибка при загрузке данных о посещениях: ' + (error.error || 'Неизвестная ошибка'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Функции для таблицы посещений
+  const handleMonthSelect = (month) => {
+    setSelectedMonth(month);
+    setSelectedKindergarten(null);
+    setSelectedAgeGroup(null);
+    setAttendanceTableData([]);
+    setTrainingDates([]);
+    loadMonthData(month);
+  };
+
+  const handleKindergartenSelect = (kindergarten) => {
+    setSelectedKindergarten(kindergarten);
+    setSelectedAgeGroup(null);
+  };
+
+  const handleAgeGroupSelect = (ageGroup) => {
+    setSelectedAgeGroup(ageGroup);
+    if (selectedMonth && selectedKindergarten) {
+      loadAttendanceTableDataFiltered(selectedMonth, selectedKindergarten.kindergarten_number, ageGroup);
+    }
+  };
+
+  // Функция для загрузки данных при выборе месяца
+  const loadMonthData = async (month) => {
+    setTableLoading(true);
+    try {
+      console.log(`Загрузка данных для месяца: ${month}`);
+      const response = await adminAPI.getAttendanceTableData(month);
+      
+      console.log('Полный ответ от API:', response);
+      
+      if (response && response.children) {
+        // Группируем детей по садам
+        const kindergartenMap = {};
+        response.children.forEach(child => {
+          const kgNum = child.group_number;
+          if (!kindergartenMap[kgNum]) {
+            kindergartenMap[kgNum] = [];
+          }
+          kindergartenMap[kgNum].push(child);
+        });
+        
+        // Создаем массив садов
+        const kgList = Object.keys(kindergartenMap).map(kgNum => ({
+          kindergarten_number: parseInt(kgNum),
+          children: kindergartenMap[kgNum]
+        }));
+        
+        console.log('Обработанные сады:', kgList);
+        setKindergartens(kgList);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки данных месяца:', error);
+    } finally {
+      setTableLoading(false);
+    }
+  };
+
+  // Функция для подсчета детей по возрастным группам
+  const getAgeGroupCounts = (kindergartenNum) => {
+    if (!selectedMonth) return { младшая: 0, средняя: 0, старшая: 0 };
+    
+    const kindergarten = kindergartens.find(kg => kg.kindergarten_number === kindergartenNum);
+    if (!kindergarten) return { младшая: 0, средняя: 0, старшая: 0 };
+    
+    const counts = { младшая: 0, средняя: 0, старшая: 0 };
+    
+    kindergarten.children.forEach(child => {
+      const groupName = (child.group_name || '').toLowerCase();
+      if (groupName.includes('младш')) {
+        counts.младшая++;
+      } else if (groupName.includes('средн')) {
+        counts.средняя++;
+      } else if (groupName.includes('старш')) {
+        counts.старшая++;
+      }
+    });
+    
+    console.log(`Подсчет для сада ${kindergartenNum}:`, counts);
+    return counts;
+  };
+
+  const loadAttendanceTableDataFiltered = async (month, kindergartenNum, ageGroup) => {
+    setTableLoading(true);
+    setAttendanceTableData([]);
+    setTrainingDates([]);
+    
+    try {
+      console.log(`Загрузка данных: месяц=${month}, сад=${kindergartenNum}, группа=${ageGroup}`);
+      const response = await adminAPI.getAttendanceTableData(month);
+      
+      console.log('Ответ от API:', response);
+      
+      if (response && response.children) {
+        // Фильтруем детей по детскому саду и возрастной группе
+        console.log(`Фильтр: ищем сад ${kindergartenNum} (тип: ${typeof kindergartenNum})`);
+        
+        let filteredChildren = response.children.filter(child => {
+          const childKgNum = parseInt(child.group_number);
+          const searchKgNum = parseInt(kindergartenNum);
+          console.log(`Ребенок: ${child.child_name}, Сад: ${child.group_number} (${childKgNum}), Ищем: ${searchKgNum}, Совпадение: ${childKgNum === searchKgNum}`);
+          return childKgNum === searchKgNum;
+        });
+
+        console.log(`После фильтра по саду ${kindergartenNum}: ${filteredChildren.length} детей`);
+
+        // Фильтруем по возрастной группе
+        filteredChildren = filteredChildren.filter(child => {
+          const groupName = (child.group_name || '').toLowerCase();
+          if (ageGroup === 'младшая') {
+            return groupName.includes('младш');
+          } else if (ageGroup === 'средняя') {
+            return groupName.includes('средн');
+          } else if (ageGroup === 'старшая') {
+            return groupName.includes('старш');
+          }
+          return false;
+        });
+
+        console.log(`После фильтра по возрасту: ${filteredChildren.length} детей`);
+        setAttendanceTableData(filteredChildren);
+      } else {
+        setAttendanceTableData([]);
+      }
+      
+      if (response && response.training_dates) {
+        setTrainingDates(response.training_dates);
+      } else {
+        setTrainingDates([]);
+      }
+      
+    } catch (error) {
+      console.error('Ошибка загрузки таблицы посещений:', error);
+      setAttendanceTableData([]);
+      setTrainingDates([]);
+      
+      const errorMessage = error.error || error.message || 'Неизвестная ошибка';
+      alert(`Ошибка при загрузке таблицы посещений: ${errorMessage}`);
+    } finally {
+      setTableLoading(false);
+    }
+  };
+
+  const getAvailableMonths = () => {
+    const months = [];
+    
+    // Добавляем сентябрь и октябрь 2025
+    const september = new Date(2025, 8, 1); // месяц 8 = сентябрь
+    const october = new Date(2025, 9, 1);   // месяц 9 = октябрь
+    
+    months.push({
+      value: '2025-09',
+      label: september.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long' })
+    });
+    
+    months.push({
+      value: '2025-10',
+      label: october.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long' })
+    });
+    
+    return months;
+  };
+
+  const getAttendanceSymbol = (childId, date) => {
+    const child = attendanceTableData.find(c => c.child_id === childId);
+    if (!child || !child.attendances) return '';
+    
+    // Ищем посещение по дате (формат YYYY-MM-DD)
+    const attendance = child.attendances.find(a => a.date === date);
+    if (!attendance) return '';
+    
+    if (attendance.attended) return '+';
+    if (attendance.absence_reason && attendance.absence_reason.toLowerCase().includes('справка')) return 'С';
+    return ''; // Пустая клетка для отсутствия без причины
+  };
+
+  // Подсчёт посещений ребёнка за месяц
+  const getChildAttendanceCount = (childId) => {
+    const child = attendanceTableData.find(c => c.child_id === childId);
+    if (!child || !child.attendances) return 0;
+    
+    return child.attendances.filter(a => a.attended).length;
+  };
+
+  // Подсчёт посещений по конкретной дате
+  const getDateAttendanceCount = (date) => {
+    let count = 0;
+    attendanceTableData.forEach(child => {
+      if (child.attendances) {
+        const attendance = child.attendances.find(a => a.date === date && a.attended);
+        if (attendance) count++;
+      }
+    });
+    return count;
+  };
+
+  const loadChildren = async (groupId) => {
+    if (!groupId) {
+      setChildren([]);
+      return;
+    }
+    try {
+      const response = await adminAPI.getGroupChildren(groupId);
+      setChildren(response.children || []);
+    } catch (error) {
+      console.error('Ошибка загрузки детей:', error);
+      setChildren([]);
+    }
+  };
+
+  const handleAttendanceFilterChange = (field, value) => {
+    setAttendanceFilters(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    if (field === 'groupId') {
+      setAttendanceFilters(prev => ({
+        ...prev,
+        childId: '' // Сбрасываем выбор ребенка при смене группы
+      }));
+      loadChildren(value);
+    }
+  };
 
   // Загрузка уведомлений при монтировании компонента
   useEffect(() => {
@@ -257,6 +535,18 @@ function AdminDashboard({ userInfo, onLogout }) {
           >
             📅 Расписание
           </button>
+          <button 
+            className={`${styles.tab} ${activeTab === 'attendance' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('attendance')}
+          >
+            👥 Посещения
+          </button>
+          <button 
+            className={`${styles.tab} ${activeTab === 'attendance_table' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('attendance_table')}
+          >
+            📊 Таблица посещений
+          </button>
         </div>
         
         <div className={styles.headerActions}>
@@ -380,7 +670,7 @@ function AdminDashboard({ userInfo, onLogout }) {
                 <div className={styles.kindergartenSelector}>
                   <h3>Выберите детский сад:</h3>
                   <div className={styles.kindergartenList}>
-                    {kindergartens.map((kindergarten) => (
+                    {kindergartens && kindergartens.map((kindergarten) => (
                       <button
                         key={kindergarten.number}
                         className={`${styles.kindergartenCard} ${selectedKindergarten?.number === kindergarten.number ? styles.selected : ''}`}
@@ -447,8 +737,17 @@ function AdminDashboard({ userInfo, onLogout }) {
                                 });
                                 setShowScheduleForm(true);
                               }}
+                              title="Редактировать тренировку"
                             >
-                              ✏️ Редактировать
+                              ✏️
+                            </button>
+                            <button 
+                              className={styles.deleteButton}
+                              onClick={() => handleDeleteTraining(training.id)}
+                              disabled={loading}
+                              title="Удалить тренировку"
+                            >
+                              🗑️
                             </button>
                           </div>
                         </div>
@@ -679,8 +978,387 @@ function AdminDashboard({ userInfo, onLogout }) {
             </div>
           </div>
         )}
-      </main>
 
+        {/* Вкладка посещений */}
+        {activeTab === 'attendance' && (
+          <div className={styles.tabContent}>
+            <div className={styles.attendanceContainer}>
+              <div className={styles.attendanceHeader}>
+                <h2>Посещения детей</h2>
+                <p>Просмотр посещений и расчет оплаты</p>
+              </div>
+
+              {/* Фильтры */}
+              <div className={styles.attendanceFilters}>
+                <div className={styles.filterRow}>
+                  <div className={styles.filterGroup}>
+                    <label>Детский сад:</label>
+                    <select 
+                      value={selectedKindergarten?.number || ''} 
+                      onChange={(e) => {
+                        const kindergarten = kindergartens.find(k => k.number === e.target.value);
+                        setSelectedKindergarten(kindergarten);
+                        setSelectedGroup(null);
+                        setAttendanceFilters(prev => ({ ...prev, groupId: '', childId: '' }));
+                      }}
+                    >
+                      <option value="">Выберите сад</option>
+                      {kindergartens && kindergartens.map(k => (
+                        <option key={k.number} value={k.number}>
+                          Детский сад №{k.number} - {k.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={styles.filterGroup}>
+                    <label>Группа:</label>
+                    <select 
+                      value={attendanceFilters.groupId} 
+                      onChange={(e) => {
+                        const groupId = e.target.value;
+                        handleAttendanceFilterChange('groupId', groupId);
+                        // Устанавливаем selectedGroup для совместимости
+                        if (selectedKindergarten) {
+                          const group = selectedKindergarten.groups.find(g => g.id === parseInt(groupId));
+                          setSelectedGroup(group);
+                        }
+                      }}
+                      disabled={!selectedKindergarten}
+                    >
+                      <option value="">Выберите группу</option>
+                      {selectedKindergarten?.groups.map(group => (
+                        <option key={group.id} value={group.id}>
+                          {group.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={styles.filterGroup}>
+                    <label>Ребенок:</label>
+                    <select 
+                      value={attendanceFilters.childId} 
+                      onChange={(e) => handleAttendanceFilterChange('childId', e.target.value)}
+                      disabled={!attendanceFilters.groupId}
+                    >
+                      <option value="">Все дети ({children.length})</option>
+                      {children.map(child => (
+                        <option key={child.id} value={child.id}>
+                          {child.full_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className={styles.filterRow}>
+                  <div className={styles.filterGroup}>
+                    <label>Период с:</label>
+                    <input 
+                      type="date" 
+                      value={attendanceFilters.dateFrom} 
+                      onChange={(e) => handleAttendanceFilterChange('dateFrom', e.target.value)}
+                    />
+                  </div>
+
+                  <div className={styles.filterGroup}>
+                    <label>Период по:</label>
+                    <input 
+                      type="date" 
+                      value={attendanceFilters.dateTo} 
+                      onChange={(e) => handleAttendanceFilterChange('dateTo', e.target.value)}
+                    />
+                  </div>
+
+                  <div className={styles.filterGroup}>
+                    <button 
+                      className={styles.searchButton}
+                      onClick={loadAttendanceData}
+                      disabled={loading}
+                    >
+                      {loading ? 'Загрузка...' : '🔍 Найти'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Результаты */}
+              {attendanceData.length > 0 && (
+                <div className={styles.attendanceResults}>
+                  <div className={styles.resultsHeader}>
+                    <div>
+                      <h3>Результаты поиска</h3>
+                      {attendanceFilters.dateFrom && attendanceFilters.dateTo && (
+                        <p className={styles.periodInfo}>
+                          Период: {new Date(attendanceFilters.dateFrom).toLocaleDateString('ru-RU')} - {new Date(attendanceFilters.dateTo).toLocaleDateString('ru-RU')}
+                        </p>
+                      )}
+                    </div>
+                    <span className={styles.resultsCount}>{attendanceData.length} {attendanceData.length === 1 ? 'ребенок' : attendanceData.length < 5 ? 'ребенка' : 'детей'}</span>
+                  </div>
+                  
+                  {attendanceData.map(child => (
+                    <div key={child.child_id} className={styles.childCard}>
+                      <div className={styles.childHeader}>
+                        <div className={styles.childMainInfo}>
+                          <h4>{child.child_name}</h4>
+                          <div className={styles.childBadges}>
+                            <span className={styles.badge}>{child.kindergarten_name}</span>
+                            <span className={styles.badge}>{child.group_name}</span>
+                          </div>
+                        </div>
+                        <div className={styles.childPayment}>
+                          <span className={styles.paymentLabel}>К оплате:</span>
+                          <span className={styles.paymentAmount}>{child.payment_amount}₽</span>
+                          <span className={styles.paymentDetails}>
+                            {child.billable_trainings} × {child.price_per_training}₽
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className={styles.childStats}>
+                        <div className={styles.statBox}>
+                          <span className={styles.statNumber}>{child.total_trainings}</span>
+                          <span className={styles.statTitle}>Всего</span>
+                        </div>
+                        <div className={`${styles.statBox} ${styles.successBox}`}>
+                          <span className={styles.statNumber}>{child.attended_trainings}</span>
+                          <span className={styles.statTitle}>Посетил</span>
+                        </div>
+                        <div className={`${styles.statBox} ${styles.warningBox}`}>
+                          <span className={styles.statNumber}>{child.missed_trainings}</span>
+                          <span className={styles.statTitle}>Пропустил</span>
+                        </div>
+                        <div className={`${styles.statBox} ${styles.infoBox}`}>
+                          <span className={styles.statNumber}>{child.confirmed_absences}</span>
+                          <span className={styles.statTitle}>Подтверждено</span>
+                        </div>
+                      </div>
+
+                      {child.attendances && child.attendances.length > 0 && (
+                        <details className={styles.attendanceDetails}>
+                          <summary className={styles.attendanceSummary}>
+                            📋 Детали посещений ({child.attendances.length})
+                          </summary>
+                          <div className={styles.attendanceGrid}>
+                            {child.attendances.map(attendance => (
+                              <div 
+                                key={attendance.id} 
+                                className={`${styles.attendanceCard} ${attendance.attended ? styles.attendedCard : styles.missedCard}`}
+                                title={attendance.absence_reason || ''}
+                              >
+                                <span className={styles.attendanceIcon}>
+                                  {attendance.attended ? '✅' : '❌'}
+                                </span>
+                                <div className={styles.attendanceInfo}>
+                                  <span className={styles.attendanceDateTime}>{attendance.date}</span>
+                                  {attendance.absence_reason && (
+                                    <span className={styles.attendanceReason}>{attendance.absence_reason}</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {attendanceData.length === 0 && !loading && (
+                <div className={styles.noData}>
+                  <p>Выберите фильтры и нажмите "Найти" для просмотра посещений</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Вкладка таблицы посещений */}
+        {activeTab === 'attendance_table' && (
+          <div className={styles.tabContent}>
+            <div className={styles.attendanceTableContainer}>
+              <div className={styles.attendanceTableHeader}>
+                <h2>Таблица посещений</h2>
+                <p>Просмотр посещений в формате таблицы Excel</p>
+              </div>
+
+              {/* Шаг 1: Выбор месяца */}
+              <div className={styles.filterSection}>
+                <h3>Шаг 1: Выберите месяц</h3>
+                <div className={styles.filterButtons}>
+                  {getAvailableMonths().map(month => (
+                    <button
+                      key={month.value}
+                      className={`${styles.filterButton} ${selectedMonth === month.value ? styles.activeFilter : ''}`}
+                      onClick={() => handleMonthSelect(month.value)}
+                      disabled={tableLoading}
+                    >
+                      {month.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Шаг 2: Выбор детского сада */}
+              {selectedMonth && kindergartens && kindergartens.length > 0 && (
+                <div className={styles.filterSection}>
+                  <h3>Шаг 2: Выберите детский сад</h3>
+                  <div className={styles.filterButtons}>
+                    {kindergartens.map(kg => (
+                      <button
+                        key={kg.kindergarten_number}
+                        className={`${styles.filterButton} ${selectedKindergarten?.kindergarten_number === kg.kindergarten_number ? styles.activeFilter : ''}`}
+                        onClick={() => handleKindergartenSelect(kg)}
+                        disabled={tableLoading}
+                      >
+                        Сад №{kg.kindergarten_number} ({kg.children?.length || 0} детей)
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Шаг 3: Выбор возрастной группы */}
+              {selectedMonth && selectedKindergarten && (
+                <div className={styles.filterSection}>
+                  <h3>Шаг 3: Выберите возрастную группу</h3>
+                  <div className={styles.filterButtons}>
+                    {['младшая', 'средняя', 'старшая'].map(ageGroup => {
+                      const counts = getAgeGroupCounts(selectedKindergarten.kindergarten_number);
+                      const count = counts[ageGroup] || 0;
+                      return (
+                        <button
+                          key={ageGroup}
+                          className={`${styles.filterButton} ${selectedAgeGroup === ageGroup ? styles.activeFilter : ''}`}
+                          onClick={() => handleAgeGroupSelect(ageGroup)}
+                          disabled={tableLoading || count === 0}
+                        >
+                          {ageGroup.charAt(0).toUpperCase() + ageGroup.slice(1)} группа ({count} детей)
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Таблица посещений */}
+              {attendanceTableData.length > 0 && trainingDates.length > 0 && selectedAgeGroup && (
+                <div className={styles.excelTable}>
+                  <div className={styles.tableInfo}>
+                    <p>
+                      <strong>Сад №{selectedKindergarten.kindergarten_number}</strong> • 
+                      <strong> {selectedAgeGroup.charAt(0).toUpperCase() + selectedAgeGroup.slice(1)} группа</strong> • 
+                      <strong> {new Date(selectedMonth + '-01').toLocaleDateString('ru-RU', { year: 'numeric', month: 'long' })}</strong>
+                    </p>
+                  </div>
+                  <div className={styles.compactTableWrapper}>
+                    <table className={styles.compactTable}>
+                      <thead>
+                        <tr>
+                          <th className={styles.compactFioColumn}>ФИО ребенка</th>
+                          <th className={styles.compactBirthdateColumn}>Дата рождения</th>
+                          <th className={styles.compactGroupColumn}>Группа</th>
+                          {trainingDates.map(date => (
+                            <th key={date} className={styles.compactDateColumn}>
+                              {new Date(date).getDate()}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {attendanceTableData.map(child => {
+                          const attendanceCount = getChildAttendanceCount(child.child_id);
+                          const birthdate = child.birth_date ? new Date(child.birth_date).toLocaleDateString('ru-RU') : '-';
+                          return (
+                            <tr key={child.child_id}>
+                              <td className={styles.compactFioCell}>
+                                {child.child_name} <span className={styles.attendanceCount}>({attendanceCount})</span>
+                              </td>
+                              <td className={styles.compactBirthdateCell}>{birthdate}</td>
+                              <td className={styles.compactGroupCell}>{child.group_name}</td>
+                              {trainingDates.map(date => {
+                                const symbol = getAttendanceSymbol(child.child_id, date);
+                                const cellClass = symbol === '+' 
+                                  ? `${styles.compactAttendanceCell} ${styles.plusSymbol}`
+                                  : symbol === 'С'
+                                  ? `${styles.compactAttendanceCell} ${styles.certificateSymbol}`
+                                  : styles.compactAttendanceCell;
+                                return (
+                                  <td key={date} className={cellClass}>
+                                    {symbol}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
+                        {/* Строка с общим количеством посещений по датам */}
+                        <tr className={styles.totalRow}>
+                          <td className={styles.compactFioCell}><strong>Итого присутствовало:</strong></td>
+                          <td className={styles.compactBirthdateCell}></td>
+                          <td className={styles.compactGroupCell}></td>
+                          {trainingDates.map(date => (
+                            <td key={date} className={styles.compactAttendanceCell}>
+                              <strong>{getDateAttendanceCount(date)}</strong>
+                            </td>
+                          ))}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Информация о данных */}
+              {attendanceTableData.length > 0 && trainingDates.length === 0 && (
+                <div className={styles.noData}>
+                  <p>Нет данных о тренировках для выбранного месяца</p>
+                </div>
+              )}
+
+              {attendanceTableData.length === 0 && trainingDates.length > 0 && (
+                <div className={styles.noData}>
+                  <p>Нет данных о детях для выбранного месяца</p>
+                </div>
+              )}
+
+              {tableLoading && (
+                <div className={styles.loading}>
+                  <p>Загрузка данных...</p>
+                </div>
+              )}
+
+              {!tableLoading && !selectedMonth && (
+                <div className={styles.noData}>
+                  <p>👆 Начните с выбора месяца</p>
+                </div>
+              )}
+
+              {!tableLoading && selectedMonth && !selectedKindergarten && (
+                <div className={styles.noData}>
+                  <p>👆 Теперь выберите детский сад</p>
+                </div>
+              )}
+
+              {!tableLoading && selectedMonth && selectedKindergarten && !selectedAgeGroup && (
+                <div className={styles.noData}>
+                  <p>👆 Выберите возрастную группу для просмотра</p>
+                </div>
+              )}
+
+              {!tableLoading && selectedAgeGroup && attendanceTableData.length === 0 && (
+                <div className={styles.noData}>
+                  <p>Нет данных для выбранных параметров</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+      
       {/* Модальное окно для просмотра справки */}
       {showModal && selectedNotification && (
         <div className={styles.modalOverlay}>

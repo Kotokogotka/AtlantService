@@ -459,3 +459,121 @@ class NotificationRead(models.Model):
     
     def __str__(self):
         return f"{self.user.username} прочитал уведомление {self.notification.id}"
+
+
+class PaymentSettings(models.Model):
+    """
+    Настройки оплаты для каждого детского сада.
+    
+    Поля:
+        kindergarten (GroupKidGarden): Детский сад.
+        price_per_training (Decimal): Стоимость одной тренировки.
+        default_trainings_per_month (int): Количество тренировок по умолчанию в месяц.
+        invoice_generation_day (int): День месяца для автоматического выставления счетов.
+        is_active (bool): Активны ли настройки.
+        created_at (DateTime): Дата создания.
+        updated_at (DateTime): Дата последнего обновления.
+    """
+    kindergarten = models.ForeignKey(GroupKidGarden, on_delete=models.CASCADE, verbose_name="Детский сад")
+    price_per_training = models.DecimalField(max_digits=10, decimal_places=2, default=500.00, verbose_name="Стоимость одной тренировки")
+    default_trainings_per_month = models.PositiveIntegerField(default=8, verbose_name="Количество тренировок по умолчанию в месяц")
+    invoice_generation_day = models.PositiveIntegerField(default=25, verbose_name="День месяца для выставления счетов")
+    is_active = models.BooleanField(default=True, verbose_name="Активно")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата обновления")
+    
+    class Meta:
+        verbose_name = "Настройки оплаты"
+        verbose_name_plural = "Настройки оплаты"
+        unique_together = ('kindergarten',)
+    
+    def __str__(self):
+        return f"Настройки оплаты для {self.kindergarten}"
+
+
+class PaymentInvoice(models.Model):
+    """
+    Счет на оплату для ребенка на определенный месяц.
+    
+    Поля:
+        child (Child): Ребенок.
+        invoice_month (Date): Месяц, за который выставлен счет.
+        total_trainings (int): Общее количество тренировок в месяце.
+        confirmed_absences (int): Количество подтвержденных пропусков по болезни.
+        billable_trainings (int): Количество тренировок к оплате.
+        price_per_training (Decimal): Стоимость одной тренировки.
+        total_amount (Decimal): Общая сумма к оплате.
+        status (str): Статус оплаты.
+        generated_at (DateTime): Дата выставления счета.
+        paid_at (DateTime): Дата оплаты.
+        due_date (Date): Срок оплаты.
+        notes (str): Примечания.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Ожидает оплаты'),
+        ('paid', 'Оплачено'),
+        ('overdue', 'Просрочено'),
+        ('cancelled', 'Отменено'),
+    ]
+    
+    child = models.ForeignKey(Child, on_delete=models.CASCADE, verbose_name="Ребенок")
+    invoice_month = models.DateField(verbose_name="Месяц счета")
+    total_trainings = models.PositiveIntegerField(verbose_name="Общее количество тренировок")
+    confirmed_absences = models.PositiveIntegerField(default=0, verbose_name="Подтвержденные пропуски по болезни")
+    billable_trainings = models.PositiveIntegerField(verbose_name="Тренировки к оплате")
+    price_per_training = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Стоимость одной тренировки")
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Общая сумма к оплате")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Статус оплаты")
+    generated_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата выставления")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="Дата оплаты")
+    due_date = models.DateField(verbose_name="Срок оплаты")
+    notes = models.TextField(blank=True, verbose_name="Примечания")
+    
+    class Meta:
+        verbose_name = "Счет на оплату"
+        verbose_name_plural = "Счета на оплату"
+        unique_together = ('child', 'invoice_month')
+        ordering = ['-invoice_month', 'child__full_name']
+    
+    def __str__(self):
+        return f"Счет для {self.child.full_name} за {self.invoice_month.strftime('%B %Y')}"
+    
+    def save(self, *args, **kwargs):
+        # Автоматически рассчитываем billable_trainings и total_amount
+        self.billable_trainings = self.total_trainings - self.confirmed_absences
+        self.total_amount = self.billable_trainings * self.price_per_training
+        super().save(*args, **kwargs)
+
+
+class TrainingCancellationNotification(models.Model):
+    """
+    Уведомление об отмене тренировки для тренера и родителя.
+    
+    Поля:
+        group (GroupKidGarden): Группа, для которой отменена тренировка.
+        cancelled_date (Date): Дата отмененной тренировки.
+        cancelled_time (Time): Время отмененной тренировки.
+        reason (str): Причина отмены.
+        created_by (User): Кто отменил тренировку.
+        created_at (DateTime): Дата создания уведомления.
+        is_read_by_trainer (bool): Прочитано ли тренером.
+        is_read_by_parents (bool): Прочитано ли родителями.
+        affects_payment (bool): Влияет ли на оплату.
+    """
+    group = models.ForeignKey(GroupKidGarden, on_delete=models.CASCADE, verbose_name="Группа")
+    cancelled_date = models.DateField(verbose_name="Дата отмененной тренировки")
+    cancelled_time = models.TimeField(verbose_name="Время отмененной тренировки")
+    reason = models.TextField(verbose_name="Причина отмены")
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Кто отменил")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
+    is_read_by_trainer = models.BooleanField(default=False, verbose_name="Прочитано тренером")
+    is_read_by_parents = models.BooleanField(default=False, verbose_name="Прочитано родителями")
+    affects_payment = models.BooleanField(default=True, verbose_name="Влияет на оплату")
+    
+    class Meta:
+        verbose_name = "Уведомление об отмене тренировки"
+        verbose_name_plural = "Уведомления об отмене тренировок"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Отмена тренировки {self.group.name} на {self.cancelled_date} в {self.cancelled_time}"

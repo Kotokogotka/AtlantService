@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { trainerAPI, apiUtils, scheduleAPI } from '../../utils/api';
+import { trainerAPI, apiUtils, scheduleAPI, cancellationNotificationsAPI } from '../../utils/api';
 import PopupNotification from '../PopupNotification/PopupNotification';
 import styles from './TrainerDashboard.module.css';
 
@@ -21,6 +21,7 @@ function TrainerDashboard({ userInfo, onLogout }) {
   const [scheduleNotifications, setScheduleNotifications] = useState([]);
   const [showPopupNotifications, setShowPopupNotifications] = useState(true);
   const [schedule, setSchedule] = useState([]);
+  const [cancellationNotifications, setCancellationNotifications] = useState([]);
 
   // Загрузка уведомлений об изменениях расписания
   const loadScheduleNotifications = async () => {
@@ -29,6 +30,16 @@ function TrainerDashboard({ userInfo, onLogout }) {
       setScheduleNotifications(response.notifications || []);
     } catch (err) {
       console.error('Ошибка загрузки уведомлений о расписании:', err);
+    }
+  };
+
+  // Загрузка уведомлений об отмене тренировок
+  const loadCancellationNotifications = async () => {
+    try {
+      const response = await cancellationNotificationsAPI.getNotifications();
+      setCancellationNotifications(response.notifications || []);
+    } catch (error) {
+      console.error('Ошибка при загрузке уведомлений об отмене:', error);
     }
   };
 
@@ -58,6 +69,7 @@ function TrainerDashboard({ userInfo, onLogout }) {
     // Загружаем группы тренера при монтировании компонента
     loadTrainerGroups();
     loadScheduleNotifications();
+    loadCancellationNotifications();
     loadSchedule();
   }, []);
 
@@ -196,7 +208,7 @@ function TrainerDashboard({ userInfo, onLogout }) {
       {/* Всплывающие уведомления */}
       {showPopupNotifications && (
         <PopupNotification
-          notifications={scheduleNotifications}
+          notifications={[...scheduleNotifications, ...cancellationNotifications]}
           onMarkAsRead={handleNotificationMarkAsRead}
           onClose={handleClosePopupNotifications}
         />

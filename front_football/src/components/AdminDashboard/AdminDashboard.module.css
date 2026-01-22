@@ -1,7 +1,7 @@
 /* Основной контейнер */
 .dashboard {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: white;
   padding: 0;
   margin: 0;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -251,18 +251,15 @@
 
 /* Основной контент */
 .main {
-  padding: 2rem;
-  max-width: 1200px;
-  margin: 0 auto;
+  padding: 0;
+  margin: 0;
   width: 100%;
+  background: white;
 }
 
 .tabContent {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
+  background: white;
   padding: 2rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   min-height: 400px;
 }
 
@@ -867,60 +864,991 @@
 .trainingCard {
   background: white;
   border: 1px solid #e9ecef;
-  border-radius: 8px;
-  padding: 1rem;
+  border-radius: 6px;
+  padding: 0.75rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   transition: all 0.3s ease;
+  min-height: 60px;
 }
 
 .trainingCard:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .trainingInfo {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
+  flex: 1;
 }
 
 .trainingDate {
   font-weight: 600;
   color: #2c3e50;
-  font-size: 1rem;
+  font-size: 0.9rem;
 }
 
 .trainingTime {
   color: #666;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .trainingStatus {
   color: #28a745;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
+  font-weight: 500;
 }
 
 .trainingActions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.3rem;
+  flex-shrink: 0;
 }
 
 .editButton {
   background: #ffc107;
   color: #000;
   border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
+  padding: 0.4rem;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 500;
+  font-size: 1rem;
   transition: all 0.3s ease;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .editButton:hover {
   background: #e0a800;
   transform: translateY(-1px);
+}
+
+.deleteButton {
+  background: #dc3545;
+  color: #fff;
+  border: none;
+  padding: 0.4rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.deleteButton:hover {
+  background: #c82333;
+  transform: translateY(-1px);
+}
+
+.deleteButton:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Стили для вкладки посещений */
+.attendanceContainer {
+  padding: 2rem;
+}
+
+.attendanceHeader {
+  margin-bottom: 2rem;
+}
+
+.attendanceHeader h2 {
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.attendanceHeader p {
+  color: #666;
+  font-size: 1rem;
+}
+
+.attendanceFilters {
+  background: #f8f9fa;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+}
+
+.filterRow {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  align-items: end;
+}
+
+.filterRow:last-child {
+  margin-bottom: 0;
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+}
+
+.filterGroup label {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #2c3e50;
+}
+
+.filterGroup select,
+.filterGroup input {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  background: white;
+  color: #2c3e50;
+  min-height: 40px;
+}
+
+.filterGroup select option {
+  background: white;
+  color: #2c3e50;
+  padding: 0.5rem;
+}
+
+.filterGroup select:focus,
+.filterGroup input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.filterGroup select:hover,
+.filterGroup input:hover {
+  border-color: #007bff;
+}
+
+.filterGroup select:disabled,
+.filterGroup input:disabled {
+  background: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.searchButton {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  height: fit-content;
+}
+
+.searchButton:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.searchButton:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.attendanceResults {
+  margin-top: 2rem;
+}
+
+.resultsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.resultsHeader h3 {
+  color: #2c3e50;
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+}
+
+.periodInfo {
+  color: #666;
+  font-size: 0.9rem;
+  margin: 0;
+  font-weight: 500;
+}
+
+.resultsCount {
+  background: #007bff;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.childCard {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.childCard:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.childHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #f8f9fa;
+}
+
+.childMainInfo h4 {
+  color: #2c3e50;
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.childBadges {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  background: #e7f3ff;
+  color: #0066cc;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.childPayment {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  color: white;
+}
+
+.paymentLabel {
+  font-size: 0.75rem;
+  opacity: 0.9;
+  margin-bottom: 0.25rem;
+}
+
+.paymentAmount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.paymentDetails {
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.childStats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.statBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  text-align: center;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.statBox:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.statNumber {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #2c3e50;
+  margin-bottom: 0.25rem;
+}
+
+.statTitle {
+  font-size: 0.8rem;
+  color: #666;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.successBox {
+  background: #d4edda;
+  border-color: #28a745;
+}
+
+.successBox .statNumber {
+  color: #28a745;
+}
+
+.warningBox {
+  background: #fff3cd;
+  border-color: #ffc107;
+}
+
+.warningBox .statNumber {
+  color: #e6a800;
+}
+
+.infoBox {
+  background: #d1ecf1;
+  border-color: #17a2b8;
+}
+
+.infoBox .statNumber {
+  color: #17a2b8;
+}
+
+.attendanceDetails {
+  margin-top: 1rem;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.attendanceSummary {
+  padding: 0.75rem 1rem;
+  background: #f8f9fa;
+  cursor: pointer;
+  font-weight: 600;
+  color: #2c3e50;
+  user-select: none;
+  transition: background 0.2s ease;
+  list-style: none;
+}
+
+.attendanceSummary::-webkit-details-marker {
+  display: none;
+}
+
+.attendanceSummary:hover {
+  background: #e9ecef;
+}
+
+.attendanceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.5rem;
+  padding: 1rem;
+  background: white;
+}
+
+.attendanceCard {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border-left: 3px solid;
+  transition: all 0.2s ease;
+}
+
+.attendanceCard:hover {
+  transform: translateX(4px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.attendedCard {
+  background: #d4edda;
+  border-left-color: #28a745;
+}
+
+.missedCard {
+  background: #f8d7da;
+  border-left-color: #dc3545;
+}
+
+.attendanceIcon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.attendanceInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.attendanceDateTime {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2c3e50;
+  white-space: nowrap;
+}
+
+.attendanceReason {
+  font-size: 0.7rem;
+  color: #666;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Адаптивность */
+@media (max-width: 1024px) {
+  .childStats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .attendanceGrid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .childHeader {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .childPayment {
+    width: 100%;
+    align-items: center;
+  }
+  
+  .childStats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .attendanceGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .resultsHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}
+
+.noData {
+  text-align: center;
+  padding: 3rem;
+  color: #666;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+/* Стили для таблицы посещений */
+.attendanceTableContainer {
+  background: white;
+  padding: 2rem;
+}
+
+.attendanceTableHeader {
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.attendanceTableHeader h2 {
+  color: #2c3e50;
+  margin: 0 0 0.5rem 0;
+  font-size: 2rem;
+}
+
+.attendanceTableHeader p {
+  color: #666;
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.monthSelector {
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.monthSelector h3 {
+  color: #2c3e50;
+  margin: 0 0 1rem 0;
+  font-size: 1.3rem;
+}
+
+.monthButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.monthButton {
+  background: #f8f9fa;
+  border: 2px solid #e9ecef;
+  color: #2c3e50;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  min-width: 120px;
+}
+
+.monthButton:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #007bff;
+  color: #007bff;
+  transform: translateY(-2px);
+}
+
+.monthButton.activeMonth {
+  background: #007bff;
+  border-color: #007bff;
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.monthButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.excelTable {
+  margin-top: 2rem;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.attendanceTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  min-width: 600px;
+}
+
+.attendanceTable th {
+  background: #f8f9fa;
+  color: #2c3e50;
+  font-weight: 600;
+  padding: 1rem 0.75rem;
+  text-align: center;
+  border: 1px solid #e9ecef;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.attendanceTable td {
+  padding: 0.75rem;
+  text-align: center;
+  border: 1px solid #e9ecef;
+  vertical-align: middle;
+}
+
+.attendanceTable tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.fioColumn {
+  min-width: 200px;
+  text-align: left !important;
+}
+
+.categoryColumn {
+  min-width: 80px;
+}
+
+.groupColumn {
+  min-width: 80px;
+}
+
+.dateColumn {
+  min-width: 50px;
+  font-weight: 700;
+  color: #007bff;
+}
+
+.fioCell {
+  text-align: left !important;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.categoryCell {
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+
+.groupCell {
+  font-weight: 600;
+  color: #007bff;
+  font-size: 1.1rem;
+}
+
+.attendanceCell {
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: #28a745;
+  min-width: 50px;
+  height: 50px;
+}
+
+.attendanceCell:empty {
+  color: #dc3545;
+}
+
+/* Адаптивность для таблицы */
+@media (max-width: 768px) {
+  .monthButtons {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .monthButton {
+    width: 100%;
+    max-width: 200px;
+  }
+  
+  .attendanceTable {
+    font-size: 0.8rem;
+  }
+  
+  .attendanceTable th,
+  .attendanceTable td {
+    padding: 0.5rem 0.25rem;
+  }
+  
+  .fioColumn {
+    min-width: 150px;
+  }
+  
+  .dateColumn {
+    min-width: 40px;
+  }
+  
+  .attendanceCell {
+    min-width: 40px;
+    height: 40px;
+    font-size: 1rem;
+  }
+}
+
+/* Стили для фильтров таблицы */
+.filterSection {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.filterSection h3 {
+  color: #2c3e50;
+  margin: 0 0 0.75rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.filterButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-start;
+}
+
+.filterButton {
+  background: white;
+  border: 2px solid #dee2e6;
+  color: #495057;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+  min-width: 100px;
+}
+
+.filterButton:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #007bff;
+  color: #007bff;
+}
+
+.filterButton.activeFilter {
+  background: #007bff;
+  border-color: #007bff;
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.25);
+}
+
+.filterButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Информация о таблице */
+.tableInfo {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: #e7f3ff;
+  border-left: 4px solid #007bff;
+  border-radius: 4px;
+}
+
+.tableInfo p {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 0.95rem;
+}
+
+/* Компактная таблица */
+.compactTableWrapper {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 85vh;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  background: white;
+}
+
+.compactTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  min-width: 500px;
+}
+
+.compactTable th {
+  background: #f1f3f5;
+  color: #2c3e50;
+  font-weight: 600;
+  padding: 0.25rem 0.2rem;
+  text-align: center;
+  border: 1px solid #dee2e6;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  font-size: 0.65rem;
+  line-height: 1.1;
+}
+
+.compactTable td {
+  padding: 0.2rem 0.15rem;
+  text-align: center;
+  border: 1px solid #dee2e6;
+  vertical-align: middle;
+  font-size: 0.6rem;
+  line-height: 1.1;
+}
+
+.compactTable tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.compactFioColumn {
+  min-width: 55px;
+  max-width: 65px;
+  text-align: center !important;
+  position: sticky;
+  left: 0;
+  background: #f1f3f5;
+  z-index: 5;
+  padding: 0.4rem 0.3rem !important;
+  line-height: 1.2;
+}
+
+.compactBirthdateColumn {
+  min-width: 30px;
+  max-width: 33px;
+  font-size: 0.55rem;
+  padding: 0.09rem 0.15rem !important;
+  line-height: 1;
+}
+
+.compactGroupColumn {
+  min-width: 20px;
+  max-width: 23px;
+  font-size: 0.55rem;
+  padding: 0.09rem 0.1rem !important;
+  line-height: 1;
+}
+
+.compactDateColumn {
+  min-width: 28px;
+  max-width: 28px;
+  font-weight: 700;
+  color: #007bff;
+  font-size: 0.65rem;
+  padding: 0.25rem 0.1rem !important;
+  line-height: 1.1;
+}
+
+.compactFioCell {
+  text-align: center !important;
+  font-weight: 500;
+  color: #2c3e50;
+  position: sticky;
+  left: 0;
+  background: white;
+  z-index: 4;
+  font-size: 0.9rem !important;
+  white-space: normal;
+  word-wrap: break-word;
+  word-break: break-word;
+  max-width: 65px;
+  padding: 0.25rem 0.3rem !important;
+  line-height: 1.2;
+}
+
+.compactBirthdateCell {
+  font-weight: 400;
+  color: #495057;
+  font-size: 0.55rem;
+  padding: 0.2rem 0.15rem !important;
+  line-height: 1.1;
+}
+
+.compactGroupCell {
+  font-weight: 500;
+  color: #6c757d;
+  font-size: 0.55rem;
+  padding: 0.2rem 0.1rem !important;
+  min-width: 20px;
+  max-width: 23px;
+  white-space: normal;
+  word-wrap: break-word;
+  line-height: 1.1;
+}
+
+.compactAttendanceCell {
+  font-weight: 700;
+  font-size: 0.7rem;
+  color: #28a745;
+  min-width: 28px;
+  max-width: 28px;
+  height: auto;
+  padding: 0.15rem !important;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.compactAttendanceCell:empty {
+  background: #fff3cd;
+}
+
+/* Разные размеры для разных символов */
+.plusSymbol {
+  font-size: 1.1rem !important;
+  color: #28a745;
+}
+
+.certificateSymbol {
+  font-size: 0.75rem !important;
+  color: #dc3545;
+  font-weight: 600;
+}
+
+/* Стили для подсчёта посещений */
+.attendanceCount {
+  color: #007bff;
+  font-weight: 600;
+  font-size: 0.65rem;
+  margin-left: 0.15rem;
+}
+
+/* Строка итогов */
+.totalRow {
+  background: #f8f9fa !important;
+  border-top: 2px solid #007bff !important;
+  font-weight: 700;
+}
+
+.totalRow td {
+  padding: 0.2rem 0.15rem !important;
+  font-size: 0.6rem;
+  color: #2c3e50;
+  line-height: 1.1;
+}
+
+.totalRow .compactAttendanceCell {
+  color: #007bff;
+  font-size: 0.95rem;
+  height: 28px;
+}
+
+/* Адаптивность для компактной таблицы */
+@media (max-width: 768px) {
+  .filterButtons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .filterButton {
+    width: 100%;
+    text-align: center;
+  }
+  
+  .compactTable {
+    font-size: 0.7rem;
+  }
+  
+  .compactTable th,
+  .compactTable td {
+    padding: 0.3rem 0.2rem;
+  }
+  
+  .compactFioColumn {
+    min-width: 120px;
+  }
+  
+  .compactDateColumn {
+    min-width: 30px;
+    max-width: 30px;
+  }
+  
+  .compactAttendanceCell {
+    min-width: 30px;
+    max-width: 30px;
+    height: 30px;
+    font-size: 0.9rem;
+  }
 }

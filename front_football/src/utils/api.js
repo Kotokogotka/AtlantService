@@ -331,6 +331,56 @@ export const adminAPI = {
       throw error.response?.data || { error: 'Ошибка сети' };
     }
   },
+
+  /**
+   * Удаление тренировки
+   * @param {number} trainingId - ID тренировки
+   * @returns {Promise} - результат удаления
+   */
+  deleteTraining: async (trainingId) => {
+    try {
+      const response = await api.delete(`/api/admin/schedule/${trainingId}/`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  // Получить данные о посещениях детей
+  getAttendanceData: async (filters = {}) => {
+    try {
+      const params = new URLSearchParams();
+      if (filters.groupId) params.append('group_id', filters.groupId);
+      if (filters.childId) params.append('child_id', filters.childId);
+      if (filters.dateFrom) params.append('date_from', filters.dateFrom);
+      if (filters.dateTo) params.append('date_to', filters.dateTo);
+      
+      const response = await api.get(`/api/admin/attendance/?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  // Получить данные для таблицы посещений
+  getAttendanceTableData: async (month) => {
+    try {
+      const response = await api.get(`/api/admin/attendance-table/?month=${month}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  // Получить детей группы
+  getGroupChildren: async (groupId) => {
+    try {
+      const response = await api.get(`/api/admin/group-children/?group_id=${groupId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
 };
 
 /**
@@ -569,6 +619,80 @@ export const scheduleAPI = {
   markNotificationAsRead: async (notificationId) => {
     try {
       const response = await api.post(`/api/schedule/notifications/${notificationId}/read/`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+};
+
+/**
+ * API функции для работы с оплатой
+ */
+export const paymentAPI = {
+  /**
+   * Получить счета на оплату для родителя
+   * @returns {Promise} - список счетов
+   */
+  getInvoices: async () => {
+    try {
+      const response = await api.get('/api/parent/invoices/');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Сгенерировать счета на следующий месяц (только для админов)
+   * @returns {Promise} - результат генерации
+   */
+  generateInvoices: async () => {
+    try {
+      const response = await api.post('/api/admin/generate-invoices/');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Получить настройки оплаты (только для админов)
+   * @returns {Promise} - настройки оплаты
+   */
+  getPaymentSettings: async () => {
+    try {
+      const response = await api.get('/api/admin/payment-settings/');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Обновить настройки оплаты (только для админов)
+   * @param {Object} settings - настройки для обновления
+   * @returns {Promise} - результат обновления
+   */
+  updatePaymentSettings: async (settings) => {
+    try {
+      const response = await api.put('/api/admin/payment-settings/', settings);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+};
+
+// API для уведомлений об отмене тренировок
+export const cancellationNotificationsAPI = {
+  /**
+   * Получить уведомления об отмене тренировок
+   * @returns {Promise} - список уведомлений
+   */
+  getNotifications: async () => {
+    try {
+      const response = await api.get('/api/training-cancellation-notifications/');
       return response.data;
     } catch (error) {
       throw error.response?.data || { error: 'Ошибка сети' };
