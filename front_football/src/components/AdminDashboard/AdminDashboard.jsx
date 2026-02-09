@@ -522,7 +522,10 @@ function AdminDashboard({ userInfo, onLogout }) {
         <div className={styles.tabs}>
           <button 
             className={`${styles.tab} ${activeTab === 'notifications' ? styles.activeTab : ''}`}
-            onClick={() => setActiveTab('notifications')}
+            onClick={() => {
+              setActiveTab('notifications');
+              setShowNotifications(false);
+            }}
           >
             📋 Уведомления
             {notifications.length > 0 && (
@@ -599,6 +602,12 @@ function AdminDashboard({ userInfo, onLogout }) {
                           <div className={styles.notificationDetails}>
                             <strong>{notification.child_name}</strong> • {formatDate(notification.date_from)} - {formatDate(notification.date_to)}
                           </div>
+                          {notification.overlap_warning && (
+                            <div className={styles.overlapBadge}>⚠️ Пересечение дат — уточните у родителя</div>
+                          )}
+                          {notification.parent_phone && (
+                            <div className={styles.notificationPhone}>📞 {notification.parent_phone}</div>
+                          )}
                           <div className={styles.notificationDate}>
                             {formatDate(notification.uploaded_at)}
                           </div>
@@ -622,14 +631,68 @@ function AdminDashboard({ userInfo, onLogout }) {
         {/* Вкладка уведомлений */}
         {activeTab === 'notifications' && (
           <div className={styles.tabContent}>
+            <div className={styles.notificationsTabHeader}>
+              <h2 className={styles.notificationsTabTitle}>Уведомления о справках и перерасчётах</h2>
+              <p className={styles.notificationsTabSubtitle}>
+                {notifications.length > 0
+                  ? `${notifications.length} ${notifications.length === 1 ? 'ожидает обработки' : 'ожидают обработки'}`
+                  : 'Нет новых заявок'}
+              </p>
+              <button
+                type="button"
+                className={styles.refreshNotificationsButton}
+                onClick={loadNotifications}
+              >
+                🔄 Обновить список
+              </button>
+            </div>
+
             {notifications.length > 0 ? (
-              <div className={styles.alert}>
-                У вас есть {notifications.length} {notifications.length === 1 ? 'новое уведомление' : 'новых уведомления'} о справках
+              <div className={styles.notificationsGrid}>
+                {notifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className={styles.notificationCard}
+                    onClick={() => handleNotificationClick(notification)}
+                  >
+                    <div className={styles.notificationCardIcon}>
+                      {getNotificationType(notification) === 'refund' ? '💰' : '📄'}
+                    </div>
+                    <div className={styles.notificationCardBody}>
+                      <div className={styles.notificationCardType}>
+                        {getNotificationType(notification) === 'refund'
+                          ? 'Запрос на перерасчёт'
+                          : 'Медицинская справка'}
+                      </div>
+                      <div className={styles.notificationCardChild}>
+                        {notification.child_name}
+                      </div>
+                      <div className={styles.notificationCardDates}>
+                        {formatDate(notification.date_from)} — {formatDate(notification.date_to)}
+                      </div>
+                      <div className={styles.notificationCardMeta}>
+                        Подано: {formatDate(notification.uploaded_at)}
+                      </div>
+                      {notification.overlap_warning && (
+                        <div className={styles.notificationCardOverlap}>
+                          ⚠️ Пересечение дат — уточните у родителя
+                        </div>
+                      )}
+                      {notification.parent_phone && (
+                        <div className={styles.notificationCardPhone}>
+                          📞 {notification.parent_phone}
+                        </div>
+                      )}
+                    </div>
+                    <div className={styles.notificationCardArrow}>→</div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className={styles.noNotificationsMain}>
+                <div className={styles.noNotificationsIcon}>✓</div>
                 <h3>Нет новых уведомлений</h3>
-                <p>Все справки и запросы на перерасчет обработаны</p>
+                <p>Все справки и запросы на перерасчёт обработаны</p>
               </div>
             )}
           </div>
@@ -1379,10 +1442,25 @@ function AdminDashboard({ userInfo, onLogout }) {
             </div>
             
             <div className={styles.modalContent}>
+              {selectedNotification.overlap_warning && (
+                <div className={styles.overlapWarning}>
+                  <strong>⚠️ Пересечение дат:</strong> {selectedNotification.overlap_message}
+                </div>
+              )}
               <div className={styles.certificateInfo}>
                 <div className={styles.infoRow}>
                   <span className={styles.infoLabel}>Ребенок:</span>
                   <span className={styles.infoValue}>{selectedNotification.child_name}</span>
+                </div>
+                <div className={styles.infoRow}>
+                  <span className={styles.infoLabel}>Телефон родителя для связи:</span>
+                  <span className={styles.infoValue}>
+                    {selectedNotification.parent_phone ? (
+                      <a href={`tel:${selectedNotification.parent_phone}`}>{selectedNotification.parent_phone}</a>
+                    ) : (
+                      'не указан'
+                    )}
+                  </span>
                 </div>
                 <div className={styles.infoRow}>
                   <span className={styles.infoLabel}>Период отсутствия:</span>

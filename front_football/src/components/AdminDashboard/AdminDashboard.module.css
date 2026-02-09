@@ -189,6 +189,21 @@
   font-size: 0.8rem;
 }
 
+.overlapBadge {
+  margin-top: 0.35rem;
+  padding: 0.25rem 0.5rem;
+  background: #fff3cd;
+  color: #856404;
+  font-size: 0.8rem;
+  border-radius: 4px;
+}
+
+.notificationPhone {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: #2c3e50;
+}
+
 /* Кнопка выхода */
 .logoutButton {
   background: #e74c3c;
@@ -273,6 +288,152 @@
 .noNotificationsMain h3 {
   color: #2c3e50;
   margin-bottom: 1rem;
+}
+
+.noNotificationsIcon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 1rem;
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+  font-size: 2rem;
+  font-weight: bold;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* Вкладка уведомлений — заголовок и сетка карточек */
+.notificationsTabHeader {
+  margin-bottom: 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.notificationsTabTitle {
+  margin: 0;
+  font-size: 1.75rem;
+  color: #2c3e50;
+  width: 100%;
+}
+
+.notificationsTabSubtitle {
+  margin: 0;
+  color: #6c757d;
+  font-size: 1rem;
+}
+
+.refreshNotificationsButton {
+  padding: 0.6rem 1.2rem;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: #495057;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.refreshNotificationsButton:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.notificationsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.25rem;
+}
+
+.notificationCard {
+  display: flex;
+  align-items: stretch;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+.notificationCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-color: #3498db;
+}
+
+.notificationCardIcon {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  color: white;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  margin-right: 1rem;
+}
+
+.notificationCardBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.notificationCardType {
+  font-size: 0.85rem;
+  color: #6c757d;
+  margin-bottom: 0.35rem;
+}
+
+.notificationCardChild {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 1.1rem;
+  margin-bottom: 0.35rem;
+}
+
+.notificationCardDates {
+  font-size: 0.95rem;
+  color: #495057;
+  margin-bottom: 0.25rem;
+}
+
+.notificationCardMeta {
+  font-size: 0.8rem;
+  color: #adb5bd;
+  margin-bottom: 0.5rem;
+}
+
+.notificationCardOverlap {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: #fff3cd;
+  color: #856404;
+  font-size: 0.8rem;
+  border-radius: 6px;
+}
+
+.notificationCardPhone {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+  color: #2c3e50;
+}
+
+.notificationCardArrow {
+  align-self: center;
+  color: #adb5bd;
+  font-size: 1.25rem;
+  margin-left: 0.5rem;
+}
+
+.notificationCard:hover .notificationCardArrow {
+  color: #3498db;
 }
 
 .alert {
@@ -607,6 +768,17 @@
   padding: 1.5rem;
   max-height: 400px;
   overflow-y: auto;
+}
+
+.overlapWarning {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  color: #856404;
+  font-size: 0.95rem;
+  line-height: 1.4;
 }
 
 .certificateInfo {

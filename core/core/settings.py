@@ -114,7 +114,7 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'fotball_db',
-        'USER': 'Kotokogotka',
+        'USER': 'kotokogotka',
         'PASSWORD': 'dfsg7f8gjkb.m,!045mc',
         'HOST': 'localhost',
         'PORT': '5432',

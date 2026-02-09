@@ -29,7 +29,8 @@ function ParentDashboard({ userInfo, onLogout }) {
   const [invoices, setInvoices] = useState([]);
   const [activeTab, setActiveTab] = useState('main');
   const [cancellationNotifications, setCancellationNotifications] = useState([]);
-
+  const [uploadDateError, setUploadDateError] = useState(false);
+  const [refundDateError, setRefundDateError] = useState(false);
 
   const loadParentData = async () => {
     try {
@@ -141,19 +142,21 @@ function ParentDashboard({ userInfo, onLogout }) {
   // Остальные функции (handleUploadSubmit, handleRefundSubmit, etc.) остаются без изменений
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
-    
-    // Валидация дат
-    if (new Date(uploadForm.date_to) < new Date(uploadForm.date_from)) {
-      setError('Дата окончания не может быть раньше даты начала');
+    setUploadDateError(false);
+
+    // Валидация дат: дата начала не должна быть больше даты окончания
+    if (uploadForm.date_from && uploadForm.date_to && new Date(uploadForm.date_to) < new Date(uploadForm.date_from)) {
+      setUploadDateError(true);
+      setError('Дата окончания болезни не может быть раньше даты начала. Проверьте поля дат.');
       return;
     }
-    
+
     const daysDiff = Math.ceil((new Date(uploadForm.date_to) - new Date(uploadForm.date_from)) / (1000 * 60 * 60 * 24));
     if (daysDiff > 365) {
       setError('Период отсутствия не может превышать 365 дней');
       return;
     }
-    
+
     try {
       setLoading(true);
       setError(null);
@@ -168,7 +171,7 @@ function ParentDashboard({ userInfo, onLogout }) {
       
       const response = await parentAPI.uploadMedicalCertificate(formData);
       
-      if (response.success) {
+      if (response.success || response.message) {
         setUploadForm({
           date_from: '',
           date_to: '',
@@ -178,18 +181,11 @@ function ParentDashboard({ userInfo, onLogout }) {
         setShowUploadForm(false);
         
         // Обновляем данные
-        const [certificatesResponse, paymentResponse] = await Promise.all([
-          parentAPI.getMedicalCertificates(),
-          parentAPI.getPaymentCalculation()
-        ]);
-        
+        const certificatesResponse = await parentAPI.getMedicalCertificates();
         if (certificatesResponse) {
           setMedicalCertificates(certificatesResponse);
         }
-        
-        if (paymentResponse) {
-          setPaymentData(paymentResponse);
-        }
+        loadInvoices();
       } else {
         setError(response.error || 'Ошибка загрузки справки');
       }
@@ -203,19 +199,21 @@ function ParentDashboard({ userInfo, onLogout }) {
 
   const handleRefundSubmit = async (e) => {
     e.preventDefault();
-    
-    // Валидация дат
-    if (new Date(refundForm.date_to) < new Date(refundForm.date_from)) {
-      setError('Дата окончания не может быть раньше даты начала');
+    setRefundDateError(false);
+
+    // Валидация дат: дата начала не должна быть больше даты окончания
+    if (refundForm.date_from && refundForm.date_to && new Date(refundForm.date_to) < new Date(refundForm.date_from)) {
+      setRefundDateError(true);
+      setError('Дата окончания отсутствия не может быть раньше даты начала. Проверьте поля дат.');
       return;
     }
-    
+
     const daysDiff = Math.ceil((new Date(refundForm.date_to) - new Date(refundForm.date_from)) / (1000 * 60 * 60 * 24));
     if (daysDiff > 365) {
       setError('Период отсутствия не может превышать 365 дней');
       return;
     }
-    
+
     try {
       setLoading(true);
       setError(null);
@@ -230,7 +228,7 @@ function ParentDashboard({ userInfo, onLogout }) {
       
       const response = await parentAPI.uploadMedicalCertificate(formData);
       
-      if (response.success) {
+      if (response.success || response.message) {
         setRefundForm({
           date_from: '',
           date_to: '',
@@ -240,18 +238,11 @@ function ParentDashboard({ userInfo, onLogout }) {
         setShowRefundForm(false);
         
         // Обновляем данные
-        const [certificatesResponse, paymentResponse] = await Promise.all([
-          parentAPI.getMedicalCertificates(),
-          parentAPI.getPaymentCalculation()
-        ]);
-        
+        const certificatesResponse = await parentAPI.getMedicalCertificates();
         if (certificatesResponse) {
           setMedicalCertificates(certificatesResponse);
         }
-        
-        if (paymentResponse) {
-          setPaymentData(paymentResponse);
-        }
+        loadInvoices();
       } else {
         setError(response.error || 'Ошибка отправки запроса на перерасчет');
       }
@@ -455,13 +446,24 @@ function ParentDashboard({ userInfo, onLogout }) {
               {showUploadForm && (
                 <form onSubmit={handleUploadSubmit} className={styles.uploadForm}>
                   <h4>Загрузка справки о болезни</h4>
+
+                  {uploadDateError && (
+                    <div className={styles.dateErrorText}>
+                      Дата окончания не может быть раньше даты начала. Укажите корректный период.
+                    </div>
+                  )}
                   
                   <div className={styles.formGroup}>
                     <label>Дата начала болезни:</label>
                     <input
                       type="date"
+                      className={uploadDateError ? styles.dateInputError : ''}
                       value={uploadForm.date_from}
-                      onChange={(e) => setUploadForm({...uploadForm, date_from: e.target.value})}
+                      onChange={(e) => {
+                        setUploadForm({...uploadForm, date_from: e.target.value});
+                        setUploadDateError(false);
+                        setError(null);
+                      }}
                       required
                     />
                   </div>
@@ -470,8 +472,13 @@ function ParentDashboard({ userInfo, onLogout }) {
                     <label>Дата окончания болезни:</label>
                     <input
                       type="date"
+                      className={uploadDateError ? styles.dateInputError : ''}
                       value={uploadForm.date_to}
-                      onChange={(e) => setUploadForm({...uploadForm, date_to: e.target.value})}
+                      onChange={(e) => {
+                        setUploadForm({...uploadForm, date_to: e.target.value});
+                        setUploadDateError(false);
+                        setError(null);
+                      }}
                       required
                     />
                   </div>
@@ -503,13 +510,24 @@ function ParentDashboard({ userInfo, onLogout }) {
               {showRefundForm && (
                 <form onSubmit={handleRefundSubmit} className={styles.uploadForm}>
                   <h4>Запрос на перерасчет</h4>
+
+                  {refundDateError && (
+                    <div className={styles.dateErrorText}>
+                      Дата окончания не может быть раньше даты начала. Укажите корректный период.
+                    </div>
+                  )}
                   
                   <div className={styles.formGroup}>
                     <label>Дата начала отсутствия:</label>
                     <input
                       type="date"
+                      className={refundDateError ? styles.dateInputError : ''}
                       value={refundForm.date_from}
-                      onChange={(e) => setRefundForm({...refundForm, date_from: e.target.value})}
+                      onChange={(e) => {
+                        setRefundForm({...refundForm, date_from: e.target.value});
+                        setRefundDateError(false);
+                        setError(null);
+                      }}
                       required
                     />
                   </div>
@@ -518,8 +536,13 @@ function ParentDashboard({ userInfo, onLogout }) {
                     <label>Дата окончания отсутствия:</label>
                     <input
                       type="date"
+                      className={refundDateError ? styles.dateInputError : ''}
                       value={refundForm.date_to}
-                      onChange={(e) => setRefundForm({...refundForm, date_to: e.target.value})}
+                      onChange={(e) => {
+                        setRefundForm({...refundForm, date_to: e.target.value});
+                        setRefundDateError(false);
+                        setError(null);
+                      }}
                       required
                     />
                   </div>

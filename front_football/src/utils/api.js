@@ -19,6 +19,10 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Для FormData не задаём Content-Type — браузер подставит multipart/form-data с boundary
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
     return config;
   },
   (error) => {
@@ -465,11 +469,7 @@ export const parentAPI = {
    */
   uploadMedicalCertificate: async (formData) => {
     try {
-      const response = await api.post('/api/parent/medical-certificates/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const response = await api.post('/api/parent/medical-certificates/', formData);
       return response.data;
     } catch (error) {
       throw error.response?.data || { error: 'Ошибка сети' };

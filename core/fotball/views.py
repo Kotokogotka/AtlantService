@@ -1192,6 +1192,21 @@ class ParentMedicalCertificatesApiView(APIView):
                         'error': f'Поле {field} обязательно'
                     }, status=status.HTTP_400_BAD_REQUEST)
 
+            date_from_str = request.data['date_from']
+            date_to_str = request.data['date_to']
+            try:
+                date_from = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+                date_to = datetime.strptime(date_to_str, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                return Response({
+                    'error': 'Некорректный формат даты. Используйте ГГГГ-ММ-ДД.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if date_from > date_to:
+                return Response({
+                    'error': 'Дата окончания не может быть раньше даты начала болезни/отсутствия.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
             # Проверяем наличие файла только если это не запрос на перерасчет
             if 'absence_reason' not in request.data and 'certificate_file' not in request.FILES:
                 return Response({
@@ -1202,8 +1217,8 @@ class ParentMedicalCertificatesApiView(APIView):
             certificate_data = {
                 'child': child,
                 'parent': user,
-                'date_from': request.data['date_from'],
-                'date_to': request.data['date_to'],
+                'date_from': date_from,
+                'date_to': date_to,
                 'note': request.data.get('note', ''),
                 'absence_reason': request.data.get('absence_reason', '')
             }
@@ -1215,6 +1230,7 @@ class ParentMedicalCertificatesApiView(APIView):
             certificate = MedicalCertificate.objects.create(**certificate_data)
 
             return Response({
+                'success': True,
                 'message': 'Справка успешно загружена',
                 'certificate_id': certificate.id
             }, status=status.HTTP_201_CREATED)
@@ -1242,17 +1258,45 @@ class AdminMedicalCertificatesApiView(APIView):
                     'error': 'Доступ запрещен'
                 }, status=status.HTTP_403_FORBIDDEN)
 
-            # Получаем все справки
+            # Получаем все справки (parent_name — связь Child -> Parent для телефона)
             certificates = MedicalCertificate.objects.select_related(
-                'child', 'parent'
+                'child', 'child__parent_name', 'parent'
             ).order_by('-uploaded_at')
 
             certificates_data = []
             for cert in certificates:
+                # Телефон родителя для связи (из модели Parent, привязанной к ребёнку)
+                parent_phone = ''
+                if cert.child.parent_name:
+                    parent_phone = cert.child.parent_name.phone or ''
+
+                # Проверка пересечения дат с другими справками/запросами по тому же ребёнку
+                overlapping = MedicalCertificate.objects.filter(
+                    child=cert.child
+                ).exclude(
+                    id=cert.id
+                ).filter(
+                    date_from__lte=cert.date_to,
+                    date_to__gte=cert.date_from
+                ).order_by('date_from')
+
+                overlap_warning = overlapping.exists()
+                overlap_message = ''
+                if overlap_warning:
+                    periods = [
+                        f'{o.date_from.strftime("%d.%m.%Y")}–{o.date_to.strftime("%d.%m.%Y")}'
+                        for o in overlapping[:5]
+                    ]
+                    overlap_message = (
+                        'Даты пересекаются с другими справками/запросами по этому ребёнку (периоды: %s). '
+                        'Уточните у родителя. Телефон для связи: %s.'
+                    ) % (', '.join(periods), parent_phone or 'не указан')
+
                 certificates_data.append({
                     'id': cert.id,
                     'child_name': cert.child.full_name,
                     'parent_name': cert.parent.username,
+                    'parent_phone': parent_phone,
                     'date_from': cert.date_from.strftime('%d.%m.%Y'),
                     'date_to': cert.date_to.strftime('%d.%m.%Y'),
                     'note': cert.note,
@@ -1264,7 +1308,9 @@ class AdminMedicalCertificatesApiView(APIView):
                     'cost_per_lesson': float(cert.cost_per_lesson),
                     'total_cost': float(cert.total_cost),
                     'file_url': request.build_absolute_uri(cert.certificate_file.url) if cert.certificate_file else None,
-                    'file_name': cert.certificate_file.name.split('/')[-1] if cert.certificate_file else None
+                    'file_name': cert.certificate_file.name.split('/')[-1] if cert.certificate_file else None,
+                    'overlap_warning': overlap_warning,
+                    'overlap_message': overlap_message,
                 })
 
             return Response(certificates_data, status=status.HTTP_200_OK)

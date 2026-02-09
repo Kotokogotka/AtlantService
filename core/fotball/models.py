@@ -438,11 +438,12 @@ class ScheduleChangeNotification(models.Model):
             role='trainer',
             linked_trainer=self.training.trainer
         )
-    
-        class Meta:
-            verbose_name = "Уведомление об изменении расписания"
-            verbose_name_plural = "Уведомления об изменениях расписания"
-            ordering = ['-created_at']
+        
+
+    class Meta:
+        verbose_name = "Уведомление об изменении расписания"
+        verbose_name_plural = "Уведомления об изменениях расписания"
+        ordering = ['-created_at']
 
 
 class NotificationRead(models.Model):
