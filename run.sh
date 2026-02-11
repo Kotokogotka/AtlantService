@@ -35,11 +35,13 @@ fi
 cd "$ROOT/core"
 export PYTHONPATH="$ROOT/core:${PYTHONPATH:-}"
 
-echo "Запуск Gunicorn — откройте в браузере: http://127.0.0.1:8000 (фронт и API)"
+# На Render порт задаётся через переменную PORT; локально используем 8000
+PORT="${PORT:-8000}"
+echo "Запуск Gunicorn на порту $PORT"
 echo ""
 
 exec "$GUNICORN" core.wsgi:application \
-  --bind 0.0.0.0:8000 \
+  --bind "0.0.0.0:${PORT}" \
   --workers 1 \
   --threads 2 \
   --timeout 120 \
