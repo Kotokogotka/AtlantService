@@ -48,7 +48,8 @@ SECRET_KEY = env('SECRET_KEY', 'django-insecure-dev-key-change-in-production')
 DEBUG = env_bool('DEBUG', True)
 
 # На хостинге укажите через запятую: ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
-ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', ['localhost', '127.0.0.1', ''])
+# .onrender.com — все сервисы на Render (atlantservice-2.onrender.com и т.д.)
+ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', ['localhost', '127.0.0.1', '.onrender.com', ''])
 
 
 # Application definition
