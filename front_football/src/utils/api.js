@@ -385,6 +385,18 @@ export const adminAPI = {
       throw error.response?.data || { error: 'Ошибка сети' };
     }
   },
+
+  /**
+   * Список родителей с непогашенными счетами за 2+ месяцев
+   */
+  getOverdueInvoices: async () => {
+    try {
+      const response = await api.get('/api/admin/overdue-invoices/');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
 };
 
 /**
@@ -410,11 +422,12 @@ export const parentAPI = {
    * @param {number} year - год
    * @returns {Promise} - данные о посещаемости
    */
-  getAttendance: async (month = null, year = null) => {
+  getAttendance: async (month = null, year = null, childId = null) => {
     try {
       const params = new URLSearchParams();
       if (month) params.append('month', month);
       if (year) params.append('year', year);
+      if (childId != null) params.append('child_id', childId);
       
       const response = await api.get(`/api/parent/attendance/?${params}`);
       return response.data;
@@ -425,11 +438,13 @@ export const parentAPI = {
 
   /**
    * Получение информации о следующей тренировке
+   * @param {number|null} childId - id ребёнка (если несколько детей)
    * @returns {Promise} - информация о следующей тренировке
    */
-  getNextTraining: async () => {
+  getNextTraining: async (childId = null) => {
     try {
-      const response = await api.get('/api/parent/next-training/');
+      const config = childId != null ? { params: { child_id: childId } } : {};
+      const response = await api.get('/api/parent/next-training/', config);
       return response.data;
     } catch (error) {
       throw error.response?.data || { error: 'Ошибка сети' };
@@ -437,12 +452,14 @@ export const parentAPI = {
   },
 
   /**
-   * Получение комментариев тренера о ребенке
+   * Получение комментариев тренера о ребенке/детях
+   * @param {number|null} childId - id ребёнка (если несколько детей)
    * @returns {Promise} - комментарии тренера
    */
-  getComments: async () => {
+  getComments: async (childId = null) => {
     try {
-      const response = await api.get('/api/parent/comments/');
+      const config = childId != null ? { params: { child_id: childId } } : {};
+      const response = await api.get('/api/parent/comments/', config);
       return response.data;
     } catch (error) {
       throw error.response?.data || { error: 'Ошибка сети' };
@@ -450,12 +467,27 @@ export const parentAPI = {
   },
 
   /**
-   * Получение справок о болезни ребенка
+   * Отметить комментарии по ребёнку как прочитанные (убирает красную точку).
+   * @param {number} childId - id ребёнка
+   */
+  markCommentsRead: async (childId) => {
+    try {
+      const response = await api.post('/api/parent/comments/mark-read/', { child_id: Number(childId) });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Получение справок о болезни ребенка/детей
+   * @param {number|null} childId - id ребёнка (если несколько детей)
    * @returns {Promise} - список справок
    */
-  getMedicalCertificates: async () => {
+  getMedicalCertificates: async (childId = null) => {
     try {
-      const response = await api.get('/api/parent/medical-certificates/');
+      const config = childId != null ? { params: { child_id: childId } } : {};
+      const response = await api.get('/api/parent/medical-certificates/', config);
       return response.data;
     } catch (error) {
       throw error.response?.data || { error: 'Ошибка сети' };
@@ -465,10 +497,14 @@ export const parentAPI = {
   /**
    * Загрузка справки о болезни
    * @param {FormData} formData - данные формы с файлом
+   * @param {number|null} childId - id ребёнка (если несколько детей)
    * @returns {Promise} - результат загрузки
    */
-  uploadMedicalCertificate: async (formData) => {
+  uploadMedicalCertificate: async (formData, childId = null) => {
     try {
+      if (childId != null) {
+        formData.append('child_id', childId);
+      }
       const response = await api.post('/api/parent/medical-certificates/', formData);
       return response.data;
     } catch (error) {
@@ -478,11 +514,13 @@ export const parentAPI = {
 
   /**
    * Получение расчета суммы к оплате
+   * @param {number|null} childId - id ребёнка (если несколько детей)
    * @returns {Promise} - данные о сумме к оплате
    */
-  getPaymentCalculation: async () => {
+  getPaymentCalculation: async (childId = null) => {
     try {
-      const response = await api.get('/api/parent/payment-calculation/');
+      const config = childId != null ? { params: { child_id: childId } } : {};
+      const response = await api.get('/api/parent/payment-calculation/', config);
       return response.data;
     } catch (error) {
       throw error.response?.data || { error: 'Ошибка сети' };
@@ -634,9 +672,10 @@ export const paymentAPI = {
    * Получить счета на оплату для родителя
    * @returns {Promise} - список счетов
    */
-  getInvoices: async () => {
+  getInvoices: async (childId = null) => {
     try {
-      const response = await api.get('/api/parent/invoices/');
+      const config = childId != null ? { params: { child_id: childId } } : {};
+      const response = await api.get('/api/parent/invoices/', config);
       return response.data;
     } catch (error) {
       throw error.response?.data || { error: 'Ошибка сети' };
@@ -677,6 +716,110 @@ export const paymentAPI = {
   updatePaymentSettings: async (settings) => {
     try {
       const response = await api.put('/api/admin/payment-settings/', settings);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Загрузить чек по счёту (родитель)
+   * @param {number} invoiceId - ID счёта
+   * @param {File} file - файл чека
+   * @returns {Promise}
+   */
+  uploadReceipt: async (invoiceId, file) => {
+    try {
+      const formData = new FormData();
+      formData.append('invoice_id', invoiceId);
+      formData.append('receipt_file', file);
+      const response = await api.post('/api/parent/invoices/upload-receipt/', formData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Список чеков на проверку (админ). status: 'pending' | 'approved' | 'rejected'
+   */
+  getPaymentReceipts: async (status = 'pending') => {
+    try {
+      const response = await api.get('/api/admin/payment-receipts/', { params: { status } });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Подтвердить или отклонить чек (админ)
+   * @param {number} receiptId - ID чека
+   * @param {'approve'|'reject'} action
+   * @param {string} adminComment - комментарий (опционально)
+   */
+  reviewPaymentReceipt: async (receiptId, action, adminComment = '') => {
+    try {
+      const response = await api.post('/api/admin/payment-receipts/', {
+        receipt_id: receiptId,
+        action,
+        admin_comment: adminComment,
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Список счетов для админа (для привязки QR). status: 'pending' | 'paid' | 'overdue' или пусто
+   */
+  getAdminInvoices: async (status = '') => {
+    try {
+      const config = status ? { params: { status } } : {};
+      const response = await api.get('/api/admin/invoices/', config);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Загрузить QR-код для счёта (админ). Устарело: используется один общий QR.
+   * @param {number} invoiceId - ID счёта
+   * @param {File} file - изображение QR
+   */
+  uploadInvoiceQR: async (invoiceId, file) => {
+    try {
+      const formData = new FormData();
+      formData.append('qr_file', file);
+      const response = await api.post(`/api/admin/invoices/${invoiceId}/upload-qr/`, formData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Получить общий QR для оплаты (один на всех)
+   */
+  getPaymentQR: async () => {
+    try {
+      const response = await api.get('/api/payment-qr/');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Ошибка сети' };
+    }
+  },
+
+  /**
+   * Загрузить общий QR для оплаты (админ). Один QR показывается всем родителям.
+   */
+  uploadGlobalPaymentQR: async (file) => {
+    try {
+      const formData = new FormData();
+      formData.append('qr_file', file);
+      const response = await api.post('/api/admin/payment-qr/upload/', formData);
       return response.data;
     } catch (error) {
       throw error.response?.data || { error: 'Ошибка сети' };

@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { parentAPI, scheduleAPI, paymentAPI, cancellationNotificationsAPI } from '../../utils/api';
 import PopupNotification from '../PopupNotification/PopupNotification';
 import styles from './ParentDashboard.module.css';
 
 function ParentDashboard({ userInfo, onLogout }) {
+  const [childrenList, setChildrenList] = useState([]);
+  const [selectedChildId, setSelectedChildId] = useState(null);
   const [childInfo, setChildInfo] = useState(null);
   const [comments, setComments] = useState([]);
   const [medicalCertificates, setMedicalCertificates] = useState([]);
@@ -27,35 +29,61 @@ function ParentDashboard({ userInfo, onLogout }) {
   const [scheduleNotifications, setScheduleNotifications] = useState([]);
   const [showPopupNotifications, setShowPopupNotifications] = useState(true);
   const [invoices, setInvoices] = useState([]);
+  const [unpaidMonthsCount, setUnpaidMonthsCount] = useState(0);
+  const [totalUnpaidAmount, setTotalUnpaidAmount] = useState(0);
+  const [globalQRCodeUrl, setGlobalQRCodeUrl] = useState(null);
   const [activeTab, setActiveTab] = useState('main');
   const [cancellationNotifications, setCancellationNotifications] = useState([]);
   const [uploadDateError, setUploadDateError] = useState(false);
   const [refundDateError, setRefundDateError] = useState(false);
+  const [uploadingReceiptForId, setUploadingReceiptForId] = useState(null);
+  const [receiptError, setReceiptError] = useState(null);
+  const [receiptFileForInvoice, setReceiptFileForInvoice] = useState({});
 
-  const loadParentData = async () => {
+  const commentsHoverMarkReadDone = useRef(false);
+  const paymentHoverMarkReadDone = useRef(false);
+
+  const invoicesByChild = useMemo(() => {
+    if (!invoices || invoices.length === 0) return [];
+    const byChild = {};
+    invoices.forEach((inv) => {
+      const key = inv.child_id;
+      if (!byChild[key]) byChild[key] = { child_id: key, child_name: inv.child_name, invoices: [] };
+      byChild[key].invoices.push(inv);
+    });
+    return Object.entries(byChild).map(([childId, data]) => ({ childId, ...data }));
+  }, [invoices]);
+
+  const loadParentData = async (childId = null) => {
+    const idToUse = childId ?? selectedChildId;
     try {
       setLoading(true);
       setError(null);
 
-      // Загружаем данные параллельно
-      const [childResponse, commentsResponse, certificatesResponse] = await Promise.all([
-        parentAPI.getChildInfo(),
-        parentAPI.getComments(),
-        parentAPI.getMedicalCertificates()
+      const childResponse = await parentAPI.getChildInfo();
+      if (childResponse && childResponse.success) {
+        const children = childResponse.children || (childResponse.child ? [childResponse.child] : []);
+        setChildrenList(children);
+        const nextSelected = idToUse && children.some(c => c.id === idToUse)
+          ? idToUse
+          : (childResponse.primary_child_id ?? children[0]?.id);
+        setSelectedChildId(nextSelected);
+        const selected = children.find(c => c.id === nextSelected) || childResponse.child || children[0];
+        setChildInfo(selected || null);
+      }
+
+      const [commentsResponse, certificatesResponse] = await Promise.all([
+        parentAPI.getComments(idToUse ?? undefined),
+        parentAPI.getMedicalCertificates(idToUse ?? undefined)
       ]);
 
-      if (childResponse && childResponse.success) {
-        setChildInfo(childResponse.child);
-      }
-
       if (commentsResponse && commentsResponse.success) {
-        setComments(commentsResponse.comments);
+        setComments(commentsResponse.comments || []);
       }
-
       if (certificatesResponse) {
-        setMedicalCertificates(certificatesResponse);
+        const certs = certificatesResponse.certificates ?? certificatesResponse;
+        setMedicalCertificates(Array.isArray(certs) ? certs : []);
       }
-
     } catch (err) {
       console.error('Ошибка загрузки данных родителя:', err);
       setError('Ошибка загрузки данных. Попробуйте обновить страницу.');
@@ -64,15 +92,44 @@ function ParentDashboard({ userInfo, onLogout }) {
     }
   };
 
-  // Загрузка счетов на оплату
+  // Загрузка счетов на оплату (по всем детям)
   const loadInvoices = useCallback(async () => {
     try {
       const response = await paymentAPI.getInvoices();
       setInvoices(response.invoices || []);
+      setUnpaidMonthsCount(response.unpaid_months_count ?? 0);
+      setTotalUnpaidAmount(response.total_unpaid_amount ?? 0);
+      setGlobalQRCodeUrl(response.global_qr_code_url || null);
     } catch (err) {
       console.error('Ошибка загрузки счетов:', err);
     }
   }, []);
+
+  const handleUploadReceipt = async (invoiceId) => {
+    const file = receiptFileForInvoice[invoiceId];
+    if (!file) {
+      setReceiptError('Выберите файл чека');
+      return;
+    }
+    setReceiptError(null);
+    setUploadingReceiptForId(invoiceId);
+    try {
+      await paymentAPI.uploadReceipt(invoiceId, file);
+      setReceiptFileForInvoice(prev => ({ ...prev, [invoiceId]: null }));
+      await loadInvoices();
+    } catch (err) {
+      setReceiptError(err.error || err.message || 'Ошибка загрузки чека');
+    } finally {
+      setUploadingReceiptForId(null);
+    }
+  };
+
+  const selectChild = async (id) => {
+    setSelectedChildId(id);
+    // Сначала отмечаем комментарии как прочитанные, потом загружаем данные — тогда в getChildInfo придёт уже 0 и точка пропадёт
+    await parentAPI.markCommentsRead(id).catch(() => {});
+    await loadParentData(id);
+  };
 
 
   const loadSchedule = useCallback(async () => {
@@ -126,10 +183,74 @@ function ParentDashboard({ userInfo, onLogout }) {
   };
 
   useEffect(() => {
+    commentsHoverMarkReadDone.current = false;
+  }, [selectedChildId]);
+
+  useEffect(() => {
+    paymentHoverMarkReadDone.current = false;
+  }, [scheduleNotifications]);
+
+  // Снять красную точку при наведении на блок комментариев
+  const handleCommentsAreaHover = useCallback(() => {
+    if (!selectedChildId || commentsHoverMarkReadDone.current) return;
+    commentsHoverMarkReadDone.current = true;
+    parentAPI.markCommentsRead(selectedChildId)
+      .then(() => {
+        setChildrenList(prev => prev.map(c => (c.id === selectedChildId ? { ...c, unread_comments_count: 0 } : c)));
+      })
+      .catch(() => { commentsHoverMarkReadDone.current = false; });
+  }, [selectedChildId]);
+
+  // Снять красную точку при наведении на блок счетов (отметить уведомления расписания как прочитанные)
+  const handlePaymentInvoicesHover = useCallback(() => {
+    if (paymentHoverMarkReadDone.current) return;
+    const unread = (scheduleNotifications || []).filter(n => !n.is_read);
+    if (unread.length === 0) return;
+    paymentHoverMarkReadDone.current = true;
+    Promise.all(unread.map(n => scheduleAPI.markNotificationAsRead(n.id)))
+      .then(() => {
+        setScheduleNotifications(prev => (prev || []).map(n => ({ ...n, is_read: true })));
+      })
+      .catch(() => { paymentHoverMarkReadDone.current = false; });
+  }, [scheduleNotifications]);
+  const getGroupName = (child) => (child?.group && typeof child.group === 'object' ? child.group.name : null) || child?.group || null;
+  const getUnreadCountForChild = (child) => {
+    if (!child) return 0;
+    const groupName = getGroupName(child);
+    const scheduleUnread = groupName
+      ? (scheduleNotifications || []).filter(n => !n.is_read && n.training?.group_name === groupName).length
+      : (scheduleNotifications || []).filter(n => !n.is_read).length;
+    const commentsUnread = child.unread_comments_count ?? 0;
+    return scheduleUnread + commentsUnread;
+  };
+
+  // Общее кол-во непрочитанного (для одного ребёнка — одна точка у «Главная»)
+  const totalUnreadCount = childrenList.length === 1 && childrenList[0]
+    ? getUnreadCountForChild(childrenList[0])
+    : 0;
+
+  const handleOpenMainTab = () => {
+    setActiveTab('main');
+    if (selectedChildId) {
+      parentAPI.markCommentsRead(selectedChildId)
+        .then(() => parentAPI.getChildInfo())
+        .then((response) => {
+          if (response?.success && response?.children?.length) {
+            setChildrenList(response.children);
+          } else {
+            setChildrenList(prev => prev.map(c => (c.id === selectedChildId ? { ...c, unread_comments_count: 0 } : c)));
+          }
+        })
+        .catch(() => {});
+    }
+  };
+
+  useEffect(() => {
     loadParentData();
     loadScheduleNotifications();
     loadCancellationNotifications();
     loadInvoices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load only on mount
   }, [loadScheduleNotifications, loadCancellationNotifications, loadInvoices]);
 
   useEffect(() => {
@@ -169,7 +290,7 @@ function ParentDashboard({ userInfo, onLogout }) {
         formData.append('certificate_file', uploadForm.certificate_file);
       }
       
-      const response = await parentAPI.uploadMedicalCertificate(formData);
+      const response = await parentAPI.uploadMedicalCertificate(formData, selectedChildId ?? undefined);
       
       if (response.success || response.message) {
         setUploadForm({
@@ -180,10 +301,10 @@ function ParentDashboard({ userInfo, onLogout }) {
         });
         setShowUploadForm(false);
         
-        // Обновляем данные
-        const certificatesResponse = await parentAPI.getMedicalCertificates();
+        const certificatesResponse = await parentAPI.getMedicalCertificates(selectedChildId ?? undefined);
         if (certificatesResponse) {
-          setMedicalCertificates(certificatesResponse);
+          const certs = certificatesResponse.certificates ?? certificatesResponse;
+          setMedicalCertificates(Array.isArray(certs) ? certs : []);
         }
         loadInvoices();
       } else {
@@ -226,7 +347,7 @@ function ParentDashboard({ userInfo, onLogout }) {
         formData.append('certificate_file', refundForm.certificate_file);
       }
       
-      const response = await parentAPI.uploadMedicalCertificate(formData);
+      const response = await parentAPI.uploadMedicalCertificate(formData, selectedChildId ?? undefined);
       
       if (response.success || response.message) {
         setRefundForm({
@@ -237,10 +358,10 @@ function ParentDashboard({ userInfo, onLogout }) {
         });
         setShowRefundForm(false);
         
-        // Обновляем данные
-        const certificatesResponse = await parentAPI.getMedicalCertificates();
+        const certificatesResponse = await parentAPI.getMedicalCertificates(selectedChildId ?? undefined);
         if (certificatesResponse) {
-          setMedicalCertificates(certificatesResponse);
+          const certs = certificatesResponse.certificates ?? certificatesResponse;
+          setMedicalCertificates(Array.isArray(certs) ? certs : []);
         }
         loadInvoices();
       } else {
@@ -255,8 +376,15 @@ function ParentDashboard({ userInfo, onLogout }) {
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const str = String(dateString).trim();
+    if (str.includes('.') && /^\d{1,2}\.\d{1,2}\.\d{4}$/.test(str)) {
+      const [d, m, y] = str.split('.');
+      const date = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+      return Number.isNaN(date.getTime()) ? str : date.toLocaleDateString('ru-RU');
+    }
     const date = new Date(dateString);
-    return date.toLocaleDateString('ru-RU');
+    return Number.isNaN(date.getTime()) ? str : date.toLocaleDateString('ru-RU');
   };
 
   // Определяем статус тренировки для календаря
@@ -279,13 +407,13 @@ function ParentDashboard({ userInfo, onLogout }) {
   };
 
   const handleRefresh = () => {
-    loadParentData();
+    loadParentData(selectedChildId ?? undefined);
     if (childInfo) {
       loadSchedule();
     }
   };
 
-  if (loading && !childInfo) {
+  if (loading && !childInfo && childrenList.length === 0) {
     return (
       <div className={styles.parentDashboard}>
         <div className={styles.main}>
@@ -320,13 +448,37 @@ function ParentDashboard({ userInfo, onLogout }) {
       <div className={styles.main}>
       <h1>Кабинет родителя</h1>
 
+        {/* Выбор ребёнка (если несколько) */}
+        {childrenList.length > 1 && (
+          <div className={styles.childSwitcher}>
+            <span className={styles.childSwitcherLabel}>Ребёнок:</span>
+            {childrenList.map((c) => {
+              const unread = getUnreadCountForChild(c);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`${styles.childSwitcherButton} ${selectedChildId === c.id ? styles.childSwitcherButtonActive : ''}`}
+                  onClick={() => selectChild(c.id)}
+                >
+                  {c.full_name}
+                  {unread > 0 && <span className={styles.childUnreadBadge} aria-label={`Непрочитанных: ${unread}`} />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Навигационные табы */}
         <div className={styles.tabs}>
           <button 
             className={`${styles.tab} ${activeTab === 'main' ? styles.activeTab : ''}`}
-            onClick={() => setActiveTab('main')}
+            onClick={handleOpenMainTab}
           >
             Главная
+            {childrenList.length <= 1 && totalUnreadCount > 0 && (
+              <span className={styles.tabUnreadBadge} aria-label={`Непрочитанных: ${totalUnreadCount}`} />
+            )}
           </button>
           <button 
             className={`${styles.tab} ${activeTab === 'payment' ? styles.activeTab : ''}`}
@@ -348,6 +500,50 @@ function ParentDashboard({ userInfo, onLogout }) {
         {/* Основной контент */}
         {activeTab === 'main' && (
         <div className={styles.dashboardGrid}>
+            {/* Уведомления: неоплата и решения по справкам */}
+            {(() => {
+              const hasUnpaid = unpaidMonthsCount > 0;
+              const certsForChild = childrenList.length > 1 && selectedChildId
+                ? (medicalCertificates || []).filter(c => c.child_id === selectedChildId)
+                : (medicalCertificates || []);
+              const certsWithDecision = (certsForChild || []).filter(
+                c => c.status_code === 'approved' || c.status_code === 'rejected'
+              );
+              if (!hasUnpaid && certsWithDecision.length === 0) return null;
+              return (
+                <div className={styles.mainAlerts}>
+                  {hasUnpaid && (
+                    <div className={styles.alertUnpaid}>
+                      <strong>Неоплаченные счета:</strong>{' '}
+                      {unpaidMonthsCount} {unpaidMonthsCount === 1 ? 'месяц' : unpaidMonthsCount < 5 ? 'месяца' : 'месяцев'} на сумму {totalUnpaidAmount} ₽.{' '}
+                      <button type="button" className={styles.alertLink} onClick={() => setActiveTab('payment')}>
+                        Перейти к оплате →
+                      </button>
+                    </div>
+                  )}
+                  {certsWithDecision.length > 0 && (
+                    <div className={styles.alertCertificates}>
+                      <strong>Решение по справкам:</strong>
+                      <ul className={styles.alertCertList}>
+                        {certsWithDecision.map((cert) => (
+                          <li key={cert.id}>
+                            <span className={cert.status_code === 'approved' ? styles.certApproved : styles.certRejected}>
+                              {cert.status_display ?? cert.status}
+                            </span>
+                            {' — '}
+                            {formatDate(cert.date_from)}–{formatDate(cert.date_to)}
+                            {cert.admin_comment && (
+                              <span className={styles.alertCertComment}> Комментарий: {cert.admin_comment}</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Информация о ребенке */}
             <div className={styles.card}>
               <h3>Информация о ребенке</h3>
@@ -572,17 +768,24 @@ function ParentDashboard({ userInfo, onLogout }) {
                 </form>
               )}
 
-              {medicalCertificates && medicalCertificates.length > 0 ? (
+              {(() => {
+                const filteredCerts = childrenList.length > 1 && selectedChildId
+                  ? (medicalCertificates || []).filter(c => c.child_id === selectedChildId)
+                  : (medicalCertificates || []);
+                return filteredCerts.length > 0 ? (
                 <div className={styles.certificatesList}>
                   <h4>Загруженные справки:</h4>
-                  {medicalCertificates.map((cert, index) => (
-                    <div key={index} className={styles.certificateItem}>
+                  {filteredCerts.map((cert, index) => (
+                    <div key={cert.id ?? index} className={styles.certificateItem}>
                       <div className={styles.certificateHeader}>
+                        {cert.child_name && childrenList.length > 1 && (
+                          <div className={styles.certificateChildName}>{cert.child_name}</div>
+                        )}
                         <div className={styles.certificateDate}>
                           {formatDate(cert.date_from)} - {formatDate(cert.date_to)}
                         </div>
-                        <div className={`${styles.certificateStatus} ${styles[cert.status]}`}>
-                          {cert.status_display}
+                        <div className={`${styles.certificateStatus} ${styles[cert.status_code] || styles[cert.status] || ''}`}>
+                          {cert.status_display ?? cert.status}
                         </div>
                       </div>
                       <div className={styles.certificateDetails}>
@@ -619,18 +822,26 @@ function ParentDashboard({ userInfo, onLogout }) {
                 <div className={styles.noData}>
                   Справки о болезни не загружены
                 </div>
-              )}
+              );
+              })()}
             </div>
 
-            {/* Комментарии от тренера */}
-            <div className={styles.card}>
+            {/* Комментарии от тренера — при наведении снимаем красную точку по комментариям */}
+            <div className={styles.card} onMouseEnter={handleCommentsAreaHover}>
               <h3>Комментарии от тренера</h3>
-              {comments && comments.length > 0 ? (
+              {(() => {
+                const filteredComments = childrenList.length > 1 && selectedChildId
+                  ? (comments || []).filter(c => c.child_id === selectedChildId)
+                  : (comments || []);
+                return filteredComments.length > 0 ? (
                 <div className={styles.commentsList}>
-                  {comments.map((comment, index) => (
-                    <div key={index} className={styles.commentItem}>
+                  {filteredComments.map((comment, index) => (
+                    <div key={comment.id ?? index} className={styles.commentItem}>
+                      {comment.child_name && childrenList.length > 1 && (
+                        <div className={styles.commentChildName}>{comment.child_name}</div>
+                      )}
                       <div className={styles.commentDate}>
-                        {formatDate(comment.date)}
+                        {formatDate(comment.created_at || comment.date)}
                       </div>
                       <div className={styles.commentText}>
                         {comment.text}
@@ -645,7 +856,8 @@ function ParentDashboard({ userInfo, onLogout }) {
                 <div className={styles.noData}>
                   Комментариев от тренера пока нет
                 </div>
-              )}
+              );
+              })()}
             </div>
           </div>
         )}
@@ -653,22 +865,42 @@ function ParentDashboard({ userInfo, onLogout }) {
         {/* Вкладка оплаты */}
         {activeTab === 'payment' && (
           <div className={styles.paymentContent}>
-            <div className={styles.card}>
+            {unpaidMonthsCount >= 2 && (
+              <div className={styles.overdueWarning}>
+                <strong>Внимание:</strong> У вас не оплачены счета за {unpaidMonthsCount} {unpaidMonthsCount === 2 ? 'месяца' : 'месяцев'} на сумму {totalUnpaidAmount} ₽. Пожалуйста, погасите задолженность.
+              </div>
+            )}
+            <div className={styles.card} onMouseEnter={handlePaymentInvoicesHover}>
               <h3>Счета на оплату</h3>
-              {invoices && invoices.length > 0 ? (
-                <div className={styles.invoicesList}>
-                  {invoices.map((invoice, index) => (
-                    <div key={invoice.id} className={styles.invoiceItem}>
-                      <div className={styles.invoiceHeader}>
-                        <div className={styles.invoiceMonth}>
-                          {invoice.invoice_month_display}
+              {receiptError && (
+                <div className={styles.receiptError}>{receiptError}</div>
+              )}
+              {invoicesByChild.length > 0 ? (
+                <div className={styles.invoicesByChild}>
+                  {invoicesByChild.map(({ childId, child_name, invoices: childInvoices }) => (
+                    <div key={childId} className={styles.invoiceChildBlock}>
+                      {childrenList.length > 1 && (
+                        <div className={styles.invoiceChildBlockTitle}>{child_name}</div>
+                      )}
+                      {globalQRCodeUrl && (
+                        <div className={styles.invoiceQR}>
+                          <div className={styles.invoiceQRTitle}>Оплата по QR-коду</div>
+                          <img src={globalQRCodeUrl} alt="QR для оплаты" className={styles.invoiceQRImage} />
+                          <div className={styles.invoiceQRAmount}>После оплаты загрузите чек по нужному счёту ниже.</div>
                         </div>
-                        <div className={`${styles.invoiceStatus} ${styles[invoice.status]}`}>
-                          {invoice.status_display}
-                        </div>
-                      </div>
-                      
-                      <div className={styles.invoiceDetails}>
+                      )}
+                      <div className={styles.invoicesList}>
+                        {childInvoices.map((invoice) => (
+                              <div key={invoice.id} className={styles.invoiceItem}>
+                                <div className={styles.invoiceHeader}>
+                                  <div className={styles.invoiceMonth}>
+                                    {invoice.invoice_month_display}
+                                  </div>
+                                  <div className={`${styles.invoiceStatus} ${styles[invoice.status]}`}>
+                                    {invoice.status_display}
+                                  </div>
+                                </div>
+                                <div className={styles.invoiceDetails}>
                         <div className={styles.invoiceRow}>
                           <span>Всего тренировок:</span>
                           <span>{invoice.total_trainings}</span>
@@ -711,6 +943,51 @@ function ParentDashboard({ userInfo, onLogout }) {
                             <strong>Примечания:</strong> {invoice.notes}
                           </div>
                         )}
+                        {(invoice.status === 'pending' || invoice.status === 'overdue') && (
+                          <div className={styles.invoiceReceipt}>
+                            {invoice.receipt_parsed_amount != null && (
+                              <div className={invoice.receipt_amount_match ? styles.receiptParsedMatch : styles.receiptParsedMismatch}>
+                                По чеку: <strong>{invoice.receipt_parsed_amount} ₽</strong>
+                                {invoice.receipt_parsed_bank && ` (${invoice.receipt_parsed_bank})`}
+                                {invoice.receipt_amount_match === true
+                                  ? ' — сумма совпадает со счётом.'
+                                  : invoice.receipt_amount_match === false
+                                    ? ' — сумма не совпадает со счётом. Проверьте чек.'
+                                    : ''}
+                              </div>
+                            )}
+                            {invoice.receipt_status === 'pending' && (
+                              <div className={styles.receiptStatus}>Чек загружен, на проверке</div>
+                            )}
+                            {invoice.receipt_status === 'rejected' && (
+                              <div className={styles.receiptStatusRejected}>Чек отклонён. Загрузите новый.</div>
+                            )}
+                            {invoice.receipt_status !== 'approved' && (
+                              <div className={styles.receiptUpload}>
+                                <input
+                                  type="file"
+                                  accept=".pdf,.jpg,.jpeg,.png"
+                                  onChange={(e) => {
+                                    const f = e.target.files?.[0];
+                                    setReceiptFileForInvoice(prev => ({ ...prev, [invoice.id]: f || null }));
+                                    setReceiptError(null);
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  className={styles.uploadReceiptButton}
+                                  disabled={uploadingReceiptForId === invoice.id || !receiptFileForInvoice[invoice.id]}
+                                  onClick={() => handleUploadReceipt(invoice.id)}
+                                >
+                                  {uploadingReceiptForId === invoice.id ? 'Загрузка...' : 'Загрузить чек'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                                </div>
+                              </div>
+                        ))}
                       </div>
                     </div>
                   ))}

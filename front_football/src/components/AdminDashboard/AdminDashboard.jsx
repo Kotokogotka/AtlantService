@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { adminAPI, scheduleAPI } from '../../utils/api';
+import { adminAPI, scheduleAPI, paymentAPI } from '../../utils/api';
 import styles from './AdminDashboard.module.css';
 
 function AdminDashboard({ userInfo, onLogout }) {
@@ -8,7 +8,7 @@ function AdminDashboard({ userInfo, onLogout }) {
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('notifications'); // 'notifications', 'schedule', 'attendance', 'attendance_table'
+  const [activeTab, setActiveTab] = useState('notifications'); // 'notifications', 'schedule', 'attendance', 'attendance_table', 'receipts', 'invoices_qr'
   
   // Состояние для таблицы посещений
   const [attendanceTableData, setAttendanceTableData] = useState([]);
@@ -50,6 +50,15 @@ function AdminDashboard({ userInfo, onLogout }) {
     notes: ''
   });
 
+  const [overdueParents, setOverdueParents] = useState([]);
+  const [paymentReceipts, setPaymentReceipts] = useState([]);
+  const [receiptsLoading, setReceiptsLoading] = useState(false);
+  const [receiptReviewComment, setReceiptReviewComment] = useState({});
+  const [globalQRUrl, setGlobalQRUrl] = useState(null);
+  const [globalQRLoading, setGlobalQRLoading] = useState(false);
+  const [globalQRUploading, setGlobalQRUploading] = useState(false);
+  const [globalQRFile, setGlobalQRFile] = useState(null);
+
   // Загрузка уведомлений
   const loadNotifications = useCallback(async () => {
     try {
@@ -60,6 +69,65 @@ function AdminDashboard({ userInfo, onLogout }) {
       console.error('Ошибка загрузки уведомлений:', error);
     }
   }, []);
+
+  // Загрузка списка родителей с просроченной оплатой (2+ месяцев)
+  const loadOverdueParents = useCallback(async () => {
+    try {
+      const response = await adminAPI.getOverdueInvoices();
+      setOverdueParents(response.overdue_parents || []);
+    } catch (error) {
+      console.error('Ошибка загрузки списка должников:', error);
+    }
+  }, []);
+
+  const loadPaymentReceipts = useCallback(async () => {
+    setReceiptsLoading(true);
+    try {
+      const response = await paymentAPI.getPaymentReceipts('pending');
+      setPaymentReceipts(response.receipts || []);
+    } catch (error) {
+      console.error('Ошибка загрузки чеков:', error);
+    } finally {
+      setReceiptsLoading(false);
+    }
+  }, []);
+
+  const handleReceiptReview = async (receiptId, action) => {
+    const comment = receiptReviewComment[receiptId] || '';
+    try {
+      await paymentAPI.reviewPaymentReceipt(receiptId, action, comment);
+      setPaymentReceipts(prev => prev.filter(r => r.id !== receiptId));
+      setReceiptReviewComment(prev => ({ ...prev, [receiptId]: '' }));
+    } catch (error) {
+      console.error('Ошибка обработки чека:', error);
+    }
+  };
+
+  const loadGlobalPaymentQR = useCallback(async () => {
+    setGlobalQRLoading(true);
+    try {
+      const response = await paymentAPI.getPaymentQR();
+      setGlobalQRUrl(response.qr_code_url || null);
+    } catch (error) {
+      console.error('Ошибка загрузки QR:', error);
+    } finally {
+      setGlobalQRLoading(false);
+    }
+  }, []);
+
+  const handleUploadGlobalQR = async () => {
+    if (!globalQRFile) return;
+    setGlobalQRUploading(true);
+    try {
+      const response = await paymentAPI.uploadGlobalPaymentQR(globalQRFile);
+      setGlobalQRUrl(response.qr_code_url || null);
+      setGlobalQRFile(null);
+    } catch (error) {
+      console.error('Ошибка загрузки QR:', error);
+    } finally {
+      setGlobalQRUploading(false);
+    }
+  };
 
   // Загрузка групп для расписания
   const loadGroups = useCallback(async () => {
@@ -343,12 +411,6 @@ function AdminDashboard({ userInfo, onLogout }) {
     }
   };
 
-  // Загрузка уведомлений при монтировании компонента
-  useEffect(() => {
-    loadNotifications();
-    loadGroups();
-  }, [loadNotifications, loadGroups]);
-
   // Обработка клика на уведомление
   const handleNotificationClick = (notification) => {
     setSelectedNotification(notification);
@@ -362,7 +424,8 @@ function AdminDashboard({ userInfo, onLogout }) {
     setLoading(true);
     try {
       await adminAPI.approveMedicalCertificate(selectedNotification.id);
-      await loadNotifications(); // Обновляем список уведомлений
+      await loadNotifications();
+      await loadOverdueParents();
       setShowModal(false);
       setSelectedNotification(null);
     } catch (error) {
@@ -379,7 +442,8 @@ function AdminDashboard({ userInfo, onLogout }) {
     setLoading(true);
     try {
       await adminAPI.rejectMedicalCertificate(selectedNotification.id);
-      await loadNotifications(); // Обновляем список уведомлений
+      await loadNotifications();
+      await loadOverdueParents();
       setShowModal(false);
       setSelectedNotification(null);
     } catch (error) {
@@ -444,9 +508,22 @@ function AdminDashboard({ userInfo, onLogout }) {
       let response;
       
       if (scheduleMode === 'bulk') {
-        // Массовое создание
+        // Массовое создание: валидация дат
+        if (bulkScheduleForm.start_date && bulkScheduleForm.end_date) {
+          if (new Date(bulkScheduleForm.start_date) > new Date(bulkScheduleForm.end_date)) {
+            alert('Дата начала периода не может быть позже даты окончания. Выберите корректные даты.');
+            setLoading(false);
+            return;
+          }
+        }
+        if (bulkScheduleMonthLimitExceeded) {
+          alert('В выбранном периоде в одном из месяцев уже более 3 тренировок. Используйте «Добавить тренировку».');
+          setLoading(false);
+          return;
+        }
         if (bulkScheduleForm.weekdays.length === 0) {
           alert('Выберите хотя бы один день недели');
+          setLoading(false);
           return;
         }
         
@@ -509,8 +586,36 @@ function AdminDashboard({ userInfo, onLogout }) {
   // Загружаем данные при монтировании компонента
   useEffect(() => {
     loadNotifications();
+    loadOverdueParents();
     loadGroups();
-  }, [loadNotifications, loadGroups]);
+  }, [loadNotifications, loadOverdueParents, loadGroups]);
+
+  // Ошибка дат в форме «Быстрое составление»: дата начала позже даты конца
+  const bulkScheduleDateError =
+    scheduleMode === 'bulk' &&
+    bulkScheduleForm.start_date &&
+    bulkScheduleForm.end_date &&
+    new Date(bulkScheduleForm.start_date) > new Date(bulkScheduleForm.end_date);
+
+  // Проверка: в выбранном периоде есть месяц, где уже больше 3 тренировок — блокируем «Быстрое составление»
+  const bulkScheduleMonthLimitExceeded = (() => {
+    if (scheduleMode !== 'bulk' || !bulkScheduleForm.start_date || !bulkScheduleForm.end_date || bulkScheduleDateError) return false;
+    const monthCounts = {};
+    for (const t of groupSchedule) {
+      const parts = t.date.split('.');
+      if (parts.length !== 3) continue;
+      const key = `${parts[2]}-${parts[1]}`;
+      monthCounts[key] = (monthCounts[key] || 0) + 1;
+    }
+    let d = new Date(bulkScheduleForm.start_date);
+    const end = new Date(bulkScheduleForm.end_date);
+    while (d <= end) {
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if ((monthCounts[key] || 0) > 3) return true;
+      d.setMonth(d.getMonth() + 1);
+    }
+    return false;
+  })();
 
   return (
     <div className={styles.dashboard}>
@@ -549,6 +654,21 @@ function AdminDashboard({ userInfo, onLogout }) {
             onClick={() => setActiveTab('attendance_table')}
           >
             📊 Таблица посещений
+          </button>
+          <button 
+            className={`${styles.tab} ${activeTab === 'receipts' ? styles.activeTab : ''}`}
+            onClick={() => { setActiveTab('receipts'); loadPaymentReceipts(); }}
+          >
+            🧾 Чеки на оплату
+            {paymentReceipts.length > 0 && (
+              <span className={styles.tabBadge}>{paymentReceipts.length}</span>
+            )}
+          </button>
+          <button 
+            className={`${styles.tab} ${activeTab === 'invoices_qr' ? styles.activeTab : ''}`}
+            onClick={() => { setActiveTab('invoices_qr'); loadGlobalPaymentQR(); }}
+          >
+            📱 QR для оплаты
           </button>
         </div>
         
@@ -641,11 +761,41 @@ function AdminDashboard({ userInfo, onLogout }) {
               <button
                 type="button"
                 className={styles.refreshNotificationsButton}
-                onClick={loadNotifications}
+                onClick={() => { loadNotifications(); loadOverdueParents(); }}
               >
                 🔄 Обновить список
               </button>
             </div>
+
+            {overdueParents.length > 0 && (
+              <div className={styles.overdueSection}>
+                <h3 className={styles.overdueSectionTitle}>⚠️ Родители с просроченной оплатой (2+ месяцев)</h3>
+                <p className={styles.overdueSectionSubtitle}>Рекомендуется связаться с родителями для уточнения оплаты</p>
+                <div className={styles.overdueList}>
+                  {overdueParents.map((item) => (
+                    <div key={item.child_id} className={styles.overdueCard}>
+                      <div className={styles.overdueCardMain}>
+                        <span className={styles.overdueChildName}>{item.child_name}</span>
+                        <span className={styles.overdueCount}>{item.unpaid_months_count} мес. не оплачено</span>
+                        <span className={styles.overdueAmount}>{item.total_unpaid_amount} ₽</span>
+                      </div>
+                      <div className={styles.overdueCardContact}>
+                        {item.parent_phone ? (
+                          <a href={`tel:${item.parent_phone}`} className={styles.overduePhone}>
+                            📞 {item.parent_phone}
+                          </a>
+                        ) : (
+                          <span className={styles.overdueNoPhone}>Телефон не указан</span>
+                        )}
+                        {item.parent_username && (
+                          <span className={styles.overdueUsername}>Логин: {item.parent_username}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {notifications.length > 0 ? (
               <div className={styles.notificationsGrid}>
@@ -843,6 +993,16 @@ function AdminDashboard({ userInfo, onLogout }) {
                       {scheduleMode === 'bulk' ? (
                         // Форма массового создания
                         <>
+                          {bulkScheduleDateError && (
+                            <div className={styles.scheduleDateError}>
+                              Дата начала периода не может быть позже даты окончания. Выберите корректные даты.
+                            </div>
+                          )}
+                          {bulkScheduleMonthLimitExceeded && (
+                            <div className={styles.scheduleMonthLimitMessage}>
+                              В выбранном периоде в одном из месяцев уже запланировано более 3 тренировок. Используйте <button type="button" className={styles.scheduleSwitchModeLink} onClick={() => { setScheduleMode('single'); setScheduleForm({ date: '', time: '', duration_minutes: 40, location: '', notes: '' }); }}>«Добавить тренировку»</button> для добавления занятий.
+                            </div>
+                          )}
                           <div className={styles.formRow}>
                             <div className={styles.formGroup}>
                               <label>Дата начала периода:</label>
@@ -851,6 +1011,7 @@ function AdminDashboard({ userInfo, onLogout }) {
                                 name="start_date"
                                 value={bulkScheduleForm.start_date}
                                 onChange={handleBulkScheduleFormChange}
+                                className={bulkScheduleDateError ? styles.scheduleDateInputError : ''}
                                 required
                               />
                             </div>
@@ -861,6 +1022,7 @@ function AdminDashboard({ userInfo, onLogout }) {
                                 name="end_date"
                                 value={bulkScheduleForm.end_date}
                                 onChange={handleBulkScheduleFormChange}
+                                className={bulkScheduleDateError ? styles.scheduleDateInputError : ''}
                                 required
                               />
                             </div>
@@ -949,7 +1111,7 @@ function AdminDashboard({ userInfo, onLogout }) {
                             <button 
                               type="submit" 
                               className={styles.createButton}
-                              disabled={loading}
+                              disabled={loading || bulkScheduleDateError || bulkScheduleMonthLimitExceeded}
                             >
                               {loading ? 'Создание...' : 'Создать расписание'}
                             </button>
@@ -1418,6 +1580,124 @@ function AdminDashboard({ userInfo, onLogout }) {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Вкладка чеки на оплату */}
+        {activeTab === 'receipts' && (
+          <div className={styles.tabContent}>
+            <div className={styles.receiptsHeader}>
+              <h2>Чеки на подтверждение</h2>
+              <p>Родители загрузили чеки по счёту. Подтвердите оплату или отклоните с комментарием.</p>
+              <button type="button" className={styles.refreshNotificationsButton} onClick={loadPaymentReceipts}>
+                🔄 Обновить
+              </button>
+            </div>
+            {receiptsLoading ? (
+              <div className={styles.loading}>Загрузка...</div>
+            ) : paymentReceipts.length === 0 ? (
+              <div className={styles.noData}>Нет чеков на проверке</div>
+            ) : (
+              <div className={styles.receiptsList}>
+                {paymentReceipts.map((r) => (
+                  <div key={r.id} className={styles.receiptCard}>
+                    <div className={styles.receiptCardHeader}>
+                      <strong>{r.child_name}</strong> — {r.invoice_month}, счёт: <strong>{r.total_amount} ₽</strong>
+                    </div>
+                    <div className={styles.receiptCardMeta}>
+                      Загрузил: {r.uploaded_by} • {r.created_at}
+                    </div>
+                    {r.parsed_amount != null && (
+                      <div className={r.amount_match ? styles.receiptParsedMatch : styles.receiptParsedMismatch}>
+                        На чеке: <strong>{r.parsed_amount} ₽</strong>
+                        {r.parsed_bank && ` • ${r.parsed_bank}`}
+                        {r.parsed_date && ` • ${r.parsed_date}`}
+                        {r.amount_match === true ? ' — сумма совпадает' : r.amount_match === false ? ' — сумма не совпадает' : ''}
+                      </div>
+                    )}
+                    {r.parsed_raw_preview && (
+                      <details className={styles.receiptRawPreview}>
+                        <summary>Текст с чека (фрагмент)</summary>
+                        <pre>{r.parsed_raw_preview}</pre>
+                      </details>
+                    )}
+                    {r.receipt_url && (
+                      <div className={styles.receiptCardFile}>
+                        <a href={r.receipt_url} target="_blank" rel="noopener noreferrer">📄 Открыть чек</a>
+                      </div>
+                    )}
+                    <div className={styles.receiptCardComment}>
+                      <input
+                        type="text"
+                        placeholder="Комментарий (при отклонении)"
+                        value={receiptReviewComment[r.id] || ''}
+                        onChange={(e) => setReceiptReviewComment(prev => ({ ...prev, [r.id]: e.target.value }))}
+                        className={styles.receiptCommentInput}
+                      />
+                    </div>
+                    <div className={styles.receiptCardActions}>
+                      <button
+                        type="button"
+                        className={styles.rejectButton}
+                        onClick={() => handleReceiptReview(r.id, 'reject')}
+                      >
+                        Отклонить
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.approveButton}
+                        onClick={() => handleReceiptReview(r.id, 'approve')}
+                      >
+                        Подтвердить оплату
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Вкладка QR для оплаты — один общий QR для всех */}
+        {activeTab === 'invoices_qr' && (
+          <div className={styles.tabContent}>
+            <div className={styles.receiptsHeader}>
+              <h2>Общий QR для оплаты</h2>
+              <p>Один QR-код для всех родителей. Привязка платежа к счёту — по загруженному чеку (сумма, дата).</p>
+              <button type="button" className={styles.refreshNotificationsButton} onClick={() => loadGlobalPaymentQR()}>
+                🔄 Обновить
+              </button>
+            </div>
+            {globalQRLoading ? (
+              <div className={styles.loading}>Загрузка...</div>
+            ) : (
+              <div className={styles.globalQRBlock}>
+                {globalQRUrl && (
+                  <div className={styles.globalQRPreview}>
+                    <p>Текущий QR (видят все родители во вкладке «Оплата»):</p>
+                    <img src={globalQRUrl} alt="QR для оплаты" className={styles.globalQRImage} />
+                  </div>
+                )}
+                <div className={styles.uploadQRRow}>
+                  <input
+                    type="file"
+                    accept="image/*,.png,.jpg,.jpeg"
+                    onChange={(e) => setGlobalQRFile(e.target.files?.[0] || null)}
+                  />
+                  <button
+                    type="button"
+                    className={styles.uploadReceiptButton}
+                    disabled={globalQRUploading || !globalQRFile}
+                    onClick={handleUploadGlobalQR}
+                  >
+                    {globalQRUploading ? 'Загрузка...' : 'Загрузить общий QR'}
+                  </button>
+                </div>
+                {!globalQRUrl && !globalQRLoading && (
+                  <p className={styles.noQRHint}>QR ещё не загружен. Загрузите изображение — он будет отображаться у всех родителей.</p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </main>

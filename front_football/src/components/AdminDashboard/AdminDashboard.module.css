@@ -436,6 +436,93 @@
   color: #3498db;
 }
 
+/* Блок «Родители с просроченной оплатой» */
+.overdueSection {
+  margin-bottom: 2rem;
+  padding: 1.25rem;
+  background: #fff8e6;
+  border: 1px solid #ffc107;
+  border-radius: 12px;
+}
+
+.overdueSectionTitle {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  color: #856404;
+}
+
+.overdueSectionSubtitle {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+.overdueList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.overdueCard {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.overdueCardMain {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.overdueChildName {
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.overdueCount {
+  font-size: 0.9rem;
+  color: #856404;
+}
+
+.overdueAmount {
+  font-weight: 600;
+  color: #dc3545;
+}
+
+.overdueCardContact {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.overduePhone {
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.overduePhone:hover {
+  text-decoration: underline;
+}
+
+.overdueNoPhone {
+  font-size: 0.9rem;
+  color: #adb5bd;
+}
+
+.overdueUsername {
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
 .alert {
   background: linear-gradient(135deg, #ff6b6b, #ee5a24);
   color: white;
@@ -654,6 +741,51 @@
 .formGroup textarea {
   resize: vertical;
   min-height: 80px;
+}
+
+.scheduleDateError {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  color: #856404;
+  font-size: 0.95rem;
+}
+
+.scheduleDateInputError {
+  border-color: #dc3545 !important;
+  background-color: #fff5f5;
+}
+
+.scheduleDateInputError:focus {
+  border-color: #dc3545 !important;
+  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.2);
+}
+
+.scheduleMonthLimitMessage {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: #e7f1ff;
+  border: 1px solid #3498db;
+  border-radius: 8px;
+  color: #2c3e50;
+  font-size: 0.95rem;
+}
+
+.scheduleSwitchModeLink {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #3498db;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.scheduleSwitchModeLink:hover {
+  color: #2980b9;
 }
 
 .formActions {
@@ -2023,4 +2155,217 @@
     height: 30px;
     font-size: 0.9rem;
   }
+}
+
+/* Чеки на оплату (админ) */
+.receiptsHeader {
+  margin-bottom: 1.5rem;
+}
+
+.receiptsHeader h2 {
+  margin-bottom: 0.5rem;
+}
+
+.receiptsHeader p {
+  color: #666;
+  margin-bottom: 1rem;
+}
+
+.receiptsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.receiptCard {
+  border: 1px solid #dee2e6;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  background: #f8f9fa;
+}
+
+.receiptCardHeader {
+  font-size: 1.05rem;
+  margin-bottom: 0.35rem;
+}
+
+.receiptCardMeta {
+  font-size: 0.9rem;
+  color: #6c757d;
+  margin-bottom: 0.75rem;
+}
+
+.receiptCardFile {
+  margin-bottom: 0.75rem;
+}
+
+.receiptCardFile a {
+  color: #0d6efd;
+}
+
+.receiptCommentInput {
+  width: 100%;
+  max-width: 400px;
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  font-size: 14px;
+}
+
+.receiptCardActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.receiptParsedMatch {
+  font-size: 14px;
+  color: #0f5132;
+  background: #d1e7dd;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.receiptParsedMismatch {
+  font-size: 14px;
+  color: #842029;
+  background: #f8d7da;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.receiptRawPreview {
+  font-size: 12px;
+  margin-bottom: 8px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fff;
+}
+
+.receiptRawPreview summary {
+  cursor: pointer;
+  color: #0d6efd;
+}
+
+.receiptRawPreview pre {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow: auto;
+}
+
+/* Вкладка «QR для оплаты» */
+.invoicesQrFilters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.invoicesQrFilters .filterButton {
+  padding: 6px 14px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.invoicesQrFilters .filterButton:hover {
+  background: #f8f9fa;
+}
+
+.invoicesQrTable {
+  overflow-x: auto;
+  margin-top: 1rem;
+}
+
+.invoicesQrTableInner {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.invoicesQrTableInner th,
+.invoicesQrTableInner td {
+  padding: 10px 12px;
+  border: 1px solid #dee2e6;
+  text-align: left;
+}
+
+.invoicesQrTableInner th {
+  background: #f8f9fa;
+  font-weight: 600;
+}
+
+.invoiceQRThumb {
+  max-width: 64px;
+  max-height: 64px;
+  display: block;
+}
+
+.noQR {
+  color: #999;
+}
+
+.uploadQRRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.uploadQRRow input[type="file"] {
+  font-size: 13px;
+}
+
+.uploadQRRow .uploadReceiptButton {
+  padding: 6px 14px;
+  background: #0d6efd;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.uploadQRRow .uploadReceiptButton:hover:not(:disabled) {
+  background: #0b5ed7;
+}
+
+.uploadQRRow .uploadReceiptButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.globalQRBlock {
+  max-width: 420px;
+}
+
+.globalQRPreview {
+  margin-bottom: 1rem;
+}
+
+.globalQRPreview p {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--text-secondary, #555);
+}
+
+.globalQRImage {
+  max-width: 200px;
+  max-height: 200px;
+  display: block;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.noQRHint {
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--text-secondary, #666);
 }
