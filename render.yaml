@@ -1,0 +1,9 @@
+# Render Blueprint: сборка в Build, запуск только Gunicorn (порт из PORT).
+# https://docs.render.com/blueprint-spec
+
+services:
+  - type: web
+    name: atlantservice
+    runtime: python
+    buildCommand: pip install -r requirements.txt && cd front_football && npm install && npm run build
+    startCommand: ./run.sh

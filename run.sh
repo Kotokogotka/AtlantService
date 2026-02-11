@@ -6,21 +6,25 @@ set -e
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
-# Сборка фронта, если есть front_football
-if [ -f "$ROOT/front_football/package.json" ]; then
-  # Чтобы React подхватил REACT_APP_* при сборке, копируем .env из корня (если есть)
+# Сборка фронта только если билда ещё нет (на Render билд делают в Build Command)
+if [ -f "$ROOT/front_football/package.json" ] && [ ! -f "$ROOT/front_football/build/index.html" ]; then
   [ -f "$ROOT/.env" ] && cp "$ROOT/.env" "$ROOT/front_football/.env"
   echo "Установка зависимостей фронта (npm install)..."
   (cd "$ROOT/front_football" && npm install) || { echo "Ошибка: npm install"; exit 1; }
   echo "Сборка фронта (npm run build)..."
   (cd "$ROOT/front_football" && npm run build) || { echo "Ошибка сборки фронта"; exit 1; }
   echo "Фронт собран."
+elif [ -f "$ROOT/front_football/build/index.html" ]; then
+  echo "Билд фронта уже есть, запуск сервера."
 fi
 
-# Путь к gunicorn: venv в корне проекта
-if [ -d "$ROOT/myenv/bin" ]; then
+# На Render PORT задан — используем gunicorn из PATH (установлен через pip в Build).
+# Локально — venv в корне проекта, если есть.
+if [ -n "${PORT}" ]; then
+  GUNICORN="gunicorn"
+elif [ -d "$ROOT/myenv/bin" ] && [ -x "$ROOT/myenv/bin/gunicorn" ]; then
   GUNICORN="$ROOT/myenv/bin/gunicorn"
-elif [ -d "$ROOT/venv/bin" ]; then
+elif [ -d "$ROOT/venv/bin" ] && [ -x "$ROOT/venv/bin/gunicorn" ]; then
   GUNICORN="$ROOT/venv/bin/gunicorn"
 else
   GUNICORN="gunicorn"
