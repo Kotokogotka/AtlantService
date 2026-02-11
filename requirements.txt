@@ -10,5 +10,6 @@ sqlparse==0.5.3
 tzdata==2025.2
 Pillow>=10.0.0
 PyMuPDF>=1.23.0
+python-dateutil>=2.8.0
 pytesseract>=0.3.10
 gunicorn>=21.0.0
