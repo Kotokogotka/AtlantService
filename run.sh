@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Запуск бэкенда и фронта одной командой: сборка React + Gunicorn.
+# Использование: ./run.sh   (из корня проекта)
+
+set -e
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT"
+
+# Сборка фронта, если есть front_football
+if [ -f "$ROOT/front_football/package.json" ]; then
+  echo "Сборка фронта (npm run build)..."
+  (cd "$ROOT/front_football" && npm run build) || { echo "Ошибка сборки фронта. Проверьте: cd front_football && npm install && npm run build"; exit 1; }
+  echo "Фронт собран."
+fi
+
+# Путь к gunicorn: venv в корне проекта
+if [ -d "$ROOT/myenv/bin" ]; then
+  GUNICORN="$ROOT/myenv/bin/gunicorn"
+elif [ -d "$ROOT/venv/bin" ]; then
+  GUNICORN="$ROOT/venv/bin/gunicorn"
+else
+  GUNICORN="gunicorn"
+fi
+
+if [ "$GUNICORN" = "gunicorn" ]; then
+  command -v gunicorn &>/dev/null || { echo "Ошибка: Gunicorn не найден. Выполните: pip install gunicorn"; exit 1; }
+else
+  [ -x "$GUNICORN" ] || { echo "Ошибка: Gunicorn не найден по пути $GUNICORN. Выполните: pip install gunicorn"; exit 1; }
+fi
+
+cd "$ROOT/core"
+export PYTHONPATH="$ROOT/core:${PYTHONPATH:-}"
+
+echo "Запуск Gunicorn — откройте в браузере: http://127.0.0.1:8000 (фронт и API)"
+echo ""
+
+exec "$GUNICORN" core.wsgi:application \
+  --bind 0.0.0.0:8000 \
+  --workers 1 \
+  --threads 2 \
+  --timeout 120 \
+  --access-logfile - \
+  --error-logfile -

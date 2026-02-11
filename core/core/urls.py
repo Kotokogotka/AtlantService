@@ -15,15 +15,18 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+
+from .views import ServeReactAppView, ServeBuildStaticView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('fotball.urls')),
+    path('static/<path:path>', ServeBuildStaticView.as_view(), name='build_static'),
 ]
-
-# Добавляем URL для медиафайлов в режиме разработки
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# SPA fallback — последним, чтобы не перехватывать /api/ и /admin/
+urlpatterns.append(re_path(r'^.*$', ServeReactAppView.as_view(), name='react_app'))

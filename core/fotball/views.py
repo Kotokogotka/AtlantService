@@ -15,6 +15,20 @@ from .models import User, GroupKidGarden, Attendance, Child, MedicalCertificate,
 from .payment_service import PaymentService
 
 
+class RootView(APIView):
+    """Корень сайта: краткая информация и ссылки (без авторизации)."""
+    permission_classes = []  # доступ без токена
+    authentication_classes = []
+
+    def get(self, request):
+        return Response({
+            'message': 'API работает',
+            'api_test': request.build_absolute_uri('/api/test/'),
+            'admin': request.build_absolute_uri('/admin/'),
+            'login': request.build_absolute_uri('/api/login/'),
+        }, status=status.HTTP_200_OK)
+
+
 class TestView(APIView):
     def get(self, request):
         return Response({'message': 'API работает!'}, status=status.HTTP_200_OK)

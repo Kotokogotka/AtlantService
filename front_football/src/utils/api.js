@@ -1,8 +1,9 @@
 import axios from 'axios';
 
-// Базовый URL для API
-// Локальный Django API
-const API_BASE_URL = 'http://localhost:8000';
+// Базовый URL для API: при сборке (хостинг) — тот же домен, при npm start — localhost:8000
+const API_BASE_URL = process.env.REACT_APP_API_URL !== undefined
+  ? process.env.REACT_APP_API_URL
+  : (process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : '');
 
 // Создаем экземпляр axios с базовой конфигурацией
 const api = axios.create({

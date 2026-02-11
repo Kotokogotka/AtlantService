@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_URL !== undefined
+  ? process.env.REACT_APP_API_URL
+  : (process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : '');
 
 export const checkAuthStatus = async () => {
   const token = localStorage.getItem('token');

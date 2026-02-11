@@ -1,15 +1,48 @@
 from django.contrib import admin
+from django import forms
+from django.contrib.auth.hashers import make_password
 from django.utils.html import format_html
 from .models import Child, Trainer, GroupKidGarden, Attendance, User, Parent, TrainingRate, MedicalCertificate, TrainingSchedule, TrainerComment, ScheduleChangeNotification, NotificationRead, PaymentSettings, GlobalPaymentQR, PaymentInvoice, PaymentReceipt, TrainingCancellationNotification
 
 
+class UserAdminForm(forms.ModelForm):
+    """Форма с полем для ввода нового пароля (сохраняется в виде хэша)."""
+    password = forms.CharField(
+        required=False,
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'}),
+        label='Пароль',
+        help_text='Оставьте пустым, чтобы не менять. При вводе будет сохранён в зашифрованном виде.'
+    )
+
+    class Meta:
+        model = User
+        fields = ('username', 'password', 'role', 'linked_trainer', 'linked_child')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields['password'].required = False
+        else:
+            self.fields['password'].required = True
+            self.fields['password'].help_text = 'Обязательно при создании пользователя.'
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        new_password = self.cleaned_data.get('password')
+        if new_password:
+            user.password = make_password(new_password)
+        if commit:
+            user.save()
+        return user
+
+
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
+    form = UserAdminForm
     list_display = ('username', 'role', 'linked_trainer', 'linked_child')
     list_filter = ('role',)
     search_fields = ('username',)
-    readonly_fields = ('password',)
-    
+
     fieldsets = (
         ('Основная информация', {
             'fields': ('username', 'password', 'role')
