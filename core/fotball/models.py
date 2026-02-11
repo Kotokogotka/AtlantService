@@ -462,6 +462,21 @@ class NotificationRead(models.Model):
         return f"{self.user.username} прочитал уведомление {self.notification.id}"
 
 
+class ParentCommentRead(models.Model):
+    """Время последнего просмотра комментариев тренера по ребёнку родителем (для индикатора «не прочитано»)."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Родитель")
+    child = models.ForeignKey(Child, on_delete=models.CASCADE, verbose_name="Ребёнок")
+    last_read_at = models.DateTimeField(verbose_name="Время последнего просмотра")
+    
+    class Meta:
+        unique_together = ('user', 'child')
+        verbose_name = "Прочитанные комментарии (родитель)"
+        verbose_name_plural = "Прочитанные комментарии (родители)"
+    
+    def __str__(self):
+        return f"{self.user.username} — {self.child.full_name}"
+
+
 class PaymentSettings(models.Model):
     """
     Настройки оплаты для каждого детского сада.
@@ -490,6 +505,22 @@ class PaymentSettings(models.Model):
     
     def __str__(self):
         return f"Настройки оплаты для {self.kindergarten}"
+
+
+class GlobalPaymentQR(models.Model):
+    """
+    Один общий QR-код для приёма оплат (все родители сканируют один и тот же QR).
+    Привязка платежа к счёту — по загруженному чеку (парсинг суммы, даты и т.д.).
+    Хранится одна запись (singleton).
+    """
+    qr_code = models.ImageField(upload_to='payment_qr_global/', blank=True, null=True, verbose_name="QR-код для оплаты")
+
+    class Meta:
+        verbose_name = "Общий QR для оплаты"
+        verbose_name_plural = "Общий QR для оплаты"
+
+    def __str__(self):
+        return "Общий QR для оплаты"
 
 
 class PaymentInvoice(models.Model):
@@ -529,21 +560,64 @@ class PaymentInvoice(models.Model):
     paid_at = models.DateTimeField(null=True, blank=True, verbose_name="Дата оплаты")
     due_date = models.DateField(verbose_name="Срок оплаты")
     notes = models.TextField(blank=True, verbose_name="Примечания")
-    
+    qr_code = models.ImageField(upload_to='payment_qr/', blank=True, null=True, verbose_name="QR-код для оплаты")
+
     class Meta:
         verbose_name = "Счет на оплату"
         verbose_name_plural = "Счета на оплату"
         unique_together = ('child', 'invoice_month')
         ordering = ['-invoice_month', 'child__full_name']
-    
+
     def __str__(self):
         return f"Счет для {self.child.full_name} за {self.invoice_month.strftime('%B %Y')}"
-    
+
     def save(self, *args, **kwargs):
         # Автоматически рассчитываем billable_trainings и total_amount
         self.billable_trainings = self.total_trainings - self.confirmed_absences
         self.total_amount = self.billable_trainings * self.price_per_training
         super().save(*args, **kwargs)
+
+
+class PaymentReceipt(models.Model):
+    """
+    Чек об оплате, загруженный родителем по счёту. Админ подтверждает или отклоняет.
+    Данные с чека распознаются для проверки суммы и отображения админу.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'На проверке'),
+        ('approved', 'Подтверждено'),
+        ('rejected', 'Отклонено'),
+    ]
+    BANK_CHOICES = [
+        ('sber', 'Сбербанк'),
+        ('vtb', 'ВТБ'),
+        ('ozon', 'Озон'),
+        ('tbank', 'Т-Банк'),
+        ('alfa', 'Альфа-Банк'),
+        ('other', 'Другой'),
+    ]
+    invoice = models.ForeignKey(PaymentInvoice, on_delete=models.CASCADE, related_name='receipts', verbose_name="Счет")
+    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Загрузил (родитель)")
+    receipt_file = models.FileField(upload_to='payment_receipts/%Y/%m/', verbose_name="Файл чека")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Статус")
+    admin_comment = models.TextField(blank=True, verbose_name="Комментарий администратора")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата загрузки")
+    reviewed_at = models.DateTimeField(null=True, blank=True, verbose_name="Дата проверки")
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_receipts', verbose_name="Проверил")
+    # Распознанные данные с чека (для проверки соответствия счёту)
+    parsed_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Сумма с чека")
+    parsed_date = models.DateField(null=True, blank=True, verbose_name="Дата с чека")
+    parsed_bank = models.CharField(max_length=20, choices=BANK_CHOICES, null=True, blank=True, verbose_name="Банк с чека")
+    parsed_raw_preview = models.TextField(blank=True, verbose_name="Фрагмент текста чека (для проверки)")
+    amount_match = models.BooleanField(null=True, blank=True, verbose_name="Сумма совпадает со счётом")
+
+    class Meta:
+        verbose_name = "Чек об оплате"
+        verbose_name_plural = "Чеки об оплате"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Чек по счёту {self.invoice} от {self.created_at.strftime('%d.%m.%Y %H:%M')}"
 
 
 class TrainingCancellationNotification(models.Model):

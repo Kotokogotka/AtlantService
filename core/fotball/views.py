@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from datetime import date, datetime, timedelta
 
-from .models import User, GroupKidGarden, Attendance, Child, MedicalCertificate, TrainingSchedule, Trainer, TrainerComment, ScheduleChangeNotification, NotificationRead, PaymentInvoice, PaymentSettings, TrainingCancellationNotification, Parent
+from .models import User, GroupKidGarden, Attendance, Child, MedicalCertificate, TrainingSchedule, Trainer, TrainerComment, ScheduleChangeNotification, NotificationRead, ParentCommentRead, PaymentInvoice, PaymentReceipt, PaymentSettings, GlobalPaymentQR, TrainingCancellationNotification, Parent
 from .payment_service import PaymentService
 
 
@@ -622,53 +622,88 @@ class AttendanceHistoryApiView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+def get_parent_children(user):
+    """Возвращает список всех детей родителя (через Parent или linked_child)."""
+    if not user or user.role != 'parent':
+        return []
+    if not user.linked_child:
+        return []
+    parent = getattr(user.linked_child, 'parent_name', None)
+    if parent:
+        children = list(parent.children.filter(is_active=True).order_by('full_name').select_related('group'))
+        if user.linked_child not in children:
+            children.insert(0, user.linked_child)
+        return children
+    return [user.linked_child]
+
+
 class ParentChildInfoApiView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
         """
-        Получение информации о ребенке родителя
+        Получение информации о детях родителя (все дети, если их несколько).
         """
         try:
             user = request.user
             
-            # Проверка, что пользователь является родителем
             if user.role != 'parent':
                 return Response({
                     'error': 'Доступ запрещен, доступ только для родителя'
                 }, status=status.HTTP_403_FORBIDDEN)
             
-            # Получение связанного ребенка
-            if not user.linked_child:
+            children = get_parent_children(user)
+            if not children:
                 return Response({
                     'error': 'Ребенок не найден в системе'
                 }, status=status.HTTP_404_NOT_FOUND)
             
-            child = user.linked_child
-            
-            # Получение информации о группе
-            group_info = None
-            if child.group:
-                group_info = {
-                    'id': child.group.id,
-                    'name': child.group.name,
-                    'kindergarten_number': child.group.kindergarten_number,
-                    'age_level': child.group.get_age_level_display()
+            # Время последнего просмотра комментариев по каждому ребёнку (для индикатора непрочитанного)
+            try:
+                read_records = {
+                    r['child_id']: r['last_read_at']
+                    for r in ParentCommentRead.objects.filter(
+                        user=user, child__in=children
+                    ).values('child_id', 'last_read_at')
                 }
-            
-            return Response({
-                'success': True,
-                'child': {
+            except Exception:
+                read_records = {}
+            children_data = []
+            for child in children:
+                group_info = None
+                if child.group:
+                    group_info = {
+                        'id': child.group.id,
+                        'name': child.group.name,
+                        'kindergarten_number': child.group.kindergarten_number,
+                        'age_level': child.group.get_age_level_display()
+                    }
+                last_read = read_records.get(child.id)
+                if last_read is not None:
+                    unread_comments_count = TrainerComment.objects.filter(
+                        child=child, created_at__gt=last_read
+                    ).count()
+                else:
+                    unread_comments_count = TrainerComment.objects.filter(child=child).count()
+                children_data.append({
                     'id': child.id,
                     'full_name': child.full_name,
                     'birth_date': child.birth_date,
                     'is_active': child.is_active,
-                    'group': group_info
-                }
+                    'group': group_info,
+                    'unread_comments_count': unread_comments_count,
+                })
+            
+            primary_id = user.linked_child_id if user.linked_child_id else (children_data[0]['id'] if children_data else None)
+            return Response({
+                'success': True,
+                'children': children_data,
+                'primary_child_id': primary_id,
+                'child': children_data[0] if children_data else None
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
-            print(f"Ошибка при получении информации о ребенке: {e}")
+            print(f"Ошибка при получении информации о детях: {e}")
             return Response({
                 'error': 'Внутренняя ошибка сервера'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -679,24 +714,33 @@ class ParentAttendanceApiView(APIView):
     
     def get(self, request):
         """
-        Получение посещаемости ребенка родителя
+        Получение посещаемости ребенка родителя. Опционально ?child_id= — по выбранному ребенку.
         """
         try:
             user = request.user
             
-            # Проверка, что пользователь является родителем
             if user.role != 'parent':
                 return Response({
                     'error': 'Доступ запрещен, доступ только для родителя'
                 }, status=status.HTTP_403_FORBIDDEN)
             
-            # Получение связанного ребенка
-            if not user.linked_child:
+            children = get_parent_children(user)
+            if not children:
                 return Response({
                     'error': 'Ребенок не найден в системе'
                 }, status=status.HTTP_404_NOT_FOUND)
             
-            child = user.linked_child
+            child_id_param = request.GET.get('child_id')
+            if child_id_param:
+                try:
+                    cid = int(child_id_param)
+                    child = next((c for c in children if c.id == cid), None)
+                    if not child:
+                        return Response({'error': 'Недопустимый child_id'}, status=status.HTTP_400_BAD_REQUEST)
+                except (ValueError, TypeError):
+                    child = children[0]
+            else:
+                child = children[0]
             
             # Получение параметров запроса
             month = request.GET.get('month')
@@ -763,24 +807,33 @@ class ParentNextTrainingApiView(APIView):
     
     def get(self, request):
         """
-        Получение информации о следующей тренировке
+        Получение информации о следующей тренировке. Опционально ?child_id= — по выбранному ребенку.
         """
         try:
             user = request.user
             
-            # Проверка, что пользователь является родителем
             if user.role != 'parent':
                 return Response({
                     'error': 'Доступ запрещен, доступ только для родителя'
                 }, status=status.HTTP_403_FORBIDDEN)
             
-            # Получение связанного ребенка
-            if not user.linked_child:
+            children = get_parent_children(user)
+            if not children:
                 return Response({
                     'error': 'Ребенок не найден в системе'
                 }, status=status.HTTP_404_NOT_FOUND)
             
-            child = user.linked_child
+            child_id_param = request.GET.get('child_id')
+            if child_id_param:
+                try:
+                    cid = int(child_id_param)
+                    child = next((c for c in children if c.id == cid), None)
+                    if not child:
+                        return Response({'error': 'Недопустимый child_id'}, status=status.HTTP_400_BAD_REQUEST)
+                except (ValueError, TypeError):
+                    child = children[0]
+            else:
+                child = children[0]
             
             # Получение информации о группе
             if not child.group:
@@ -821,32 +874,41 @@ class ParentCommentsApiView(APIView):
     
     def get(self, request):
         """
-        Получение комментариев тренера о ребенке
+        Получение комментариев тренера о ребенке/детях. Опционально ?child_id= — по одному ребенку.
         """
         try:
             user = request.user
             
-            # Проверка, что пользователь является родителем
             if user.role != 'parent':
                 return Response({
                     'error': 'Доступ запрещен, доступ только для родителя'
                 }, status=status.HTTP_403_FORBIDDEN)
             
-            # Получение связанного ребенка
-            if not user.linked_child:
+            children = get_parent_children(user)
+            if not children:
                 return Response({
                     'error': 'Ребенок не найден в системе'
                 }, status=status.HTTP_404_NOT_FOUND)
             
-            child = user.linked_child
+            child_ids = [c.id for c in children]
+            child_id_param = request.GET.get('child_id')
+            if child_id_param:
+                try:
+                    cid = int(child_id_param)
+                    if cid not in child_ids:
+                        return Response({'error': 'Недопустимый child_id'}, status=status.HTTP_400_BAD_REQUEST)
+                    child_ids = [cid]
+                except (ValueError, TypeError):
+                    pass
             
-            # Получаем комментарии тренеров о ребенке
-            comments = TrainerComment.objects.filter(child=child).select_related('trainer').order_by('-created_at')
+            comments = TrainerComment.objects.filter(child_id__in=child_ids).select_related('trainer', 'child').order_by('-created_at')
             
             comments_data = []
             for comment in comments:
                 comments_data.append({
                     'id': comment.id,
+                    'child_id': comment.child_id,
+                    'child_name': comment.child.full_name,
                     'date': comment.created_at.strftime('%d.%m.%Y'),
                     'trainer_name': comment.trainer.full_name,
                     'text': comment.comment_text,
@@ -863,6 +925,39 @@ class ParentCommentsApiView(APIView):
             return Response({
                 'error': 'Внутренняя ошибка сервера'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ParentCommentsMarkReadApiView(APIView):
+    """Отметить комментарии по ребёнку как прочитанные (для сброса красной точки)."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            user = request.user
+            if user.role != 'parent':
+                return Response({'error': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
+            children = get_parent_children(user)
+            if not children:
+                return Response({'error': 'Ребенок не найден'}, status=status.HTTP_404_NOT_FOUND)
+            child_id = request.data.get('child_id')
+            if child_id is None:
+                return Response({'error': 'Укажите child_id'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                child_id = int(child_id)
+            except (ValueError, TypeError):
+                return Response({'error': 'Некорректный child_id'}, status=status.HTTP_400_BAD_REQUEST)
+            child = next((c for c in children if c.id == child_id), None)
+            if not child:
+                return Response({'error': 'Недопустимый child_id'}, status=status.HTTP_400_BAD_REQUEST)
+            now = timezone.now()
+            ParentCommentRead.objects.update_or_create(
+                user=user, child=child,
+                defaults={'last_read_at': now}
+            )
+            return Response({'success': True, 'message': 'Комментарии отмечены как прочитанные'}, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Ошибка при отметке комментариев: {e}")
+            return Response({'error': 'Внутренняя ошибка сервера'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class TrainerCommentsApiView(APIView):
@@ -1004,7 +1099,7 @@ class ParentPaymentCalculationApiView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Рассчитать сумму к оплате за текущий месяц"""
+        """Рассчитать сумму к оплате за текущий месяц. Опционально ?child_id= — по выбранному ребенку."""
         try:
             user = request.user
             
@@ -1013,13 +1108,23 @@ class ParentPaymentCalculationApiView(APIView):
                     'error': 'Доступ запрещен'
                 }, status=status.HTTP_403_FORBIDDEN)
 
-            # Получаем ребенка родителя
-            if not user.linked_child:
+            children = get_parent_children(user)
+            if not children:
                 return Response({
                     'error': 'Ребенок не найден'
                 }, status=status.HTTP_404_NOT_FOUND)
 
-            child = user.linked_child
+            child_id_param = request.GET.get('child_id')
+            if child_id_param:
+                try:
+                    cid = int(child_id_param)
+                    child = next((c for c in children if c.id == cid), None)
+                    if not child:
+                        return Response({'error': 'Недопустимый child_id'}, status=status.HTTP_400_BAD_REQUEST)
+                except (ValueError, TypeError):
+                    child = children[0]
+            else:
+                child = children[0]
 
             # Получаем текущий месяц и год
             now = timezone.now()
@@ -1114,33 +1219,42 @@ class ParentMedicalCertificatesApiView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def get(self, request):
-        """Получить список справок для ребенка родителя"""
+        """Получить список справок. Опционально ?child_id= — по одному ребенку, иначе по всем детям родителя."""
         try:
             user = request.user
-            print(f"DEBUG: User role: {user.role}")
             
             if user.role != 'parent':
                 return Response({
                     'error': 'Доступ запрещен'
                 }, status=status.HTTP_403_FORBIDDEN)
 
-            # Получаем ребенка родителя
-            if not user.linked_child:
+            children = get_parent_children(user)
+            if not children:
                 return Response({
                     'error': 'Ребенок не найден'
                 }, status=status.HTTP_404_NOT_FOUND)
 
-            child = user.linked_child
+            child_ids = [c.id for c in children]
+            child_id_param = request.GET.get('child_id')
+            if child_id_param:
+                try:
+                    cid = int(child_id_param)
+                    if cid not in child_ids:
+                        return Response({'error': 'Недопустимый child_id'}, status=status.HTTP_400_BAD_REQUEST)
+                    child_ids = [cid]
+                except (ValueError, TypeError):
+                    pass
 
-            # Получаем справки
             certificates = MedicalCertificate.objects.filter(
-                child=child
-            ).order_by('-uploaded_at')
+                child_id__in=child_ids
+            ).select_related('child').order_by('-uploaded_at')
 
             certificates_data = []
             for cert in certificates:
                 certificates_data.append({
                     'id': cert.id,
+                    'child_id': cert.child_id,
+                    'child_name': cert.child.full_name,
                     'date_from': cert.date_from.strftime('%d.%m.%Y'),
                     'date_to': cert.date_to.strftime('%d.%m.%Y'),
                     'note': cert.note,
@@ -1157,7 +1271,6 @@ class ParentMedicalCertificatesApiView(APIView):
 
             return Response({
                 'certificates': certificates_data,
-                'child_name': child.full_name
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -1176,13 +1289,23 @@ class ParentMedicalCertificatesApiView(APIView):
                     'error': 'Доступ запрещен'
                 }, status=status.HTTP_403_FORBIDDEN)
 
-            # Получаем ребенка родителя
-            if not user.linked_child:
+            children = get_parent_children(user)
+            if not children:
                 return Response({
                     'error': 'Ребенок не найден'
                 }, status=status.HTTP_404_NOT_FOUND)
 
-            child = user.linked_child
+            child_id_param = request.data.get('child_id')
+            if child_id_param is not None:
+                try:
+                    cid = int(child_id_param)
+                    child = next((c for c in children if c.id == cid), None)
+                    if not child:
+                        return Response({'error': 'Недопустимый child_id'}, status=status.HTTP_400_BAD_REQUEST)
+                except (ValueError, TypeError):
+                    child = children[0]
+            else:
+                child = children[0]
 
             # Валидация данных
             required_fields = ['date_from', 'date_to']
@@ -1812,15 +1935,13 @@ class TrainingCancellationNotificationsApiView(APIView):
                 notifications.update(is_read_by_trainer=True)
                 
             elif user.role == 'parent':
-                # Родитель видит уведомления для групп своих детей
-                parent = Parent.objects.get(user=user)
-                children = Child.objects.filter(parent=parent)
-                group_ids = children.values_list('group_id', flat=True)
-                
+                # Родитель видит уведомления для групп всех своих детей
+                children = get_parent_children(user)
+                group_ids = [c.group_id for c in children if c.group_id]
                 notifications = TrainingCancellationNotification.objects.filter(
                     group_id__in=group_ids,
                     is_read_by_parents=False
-                ).order_by('-created_at')
+                ).order_by('-created_at') if group_ids else []
                 
                 # Отмечаем как прочитанные
                 notifications.update(is_read_by_parents=True)
@@ -2219,15 +2340,20 @@ class ScheduleNotificationsApiView(APIView):
             user = request.user
             
             if user.role == 'parent':
-                # Родитель получает уведомления для группы своего ребенка
-                if not user.linked_child or not user.linked_child.group:
+                # Родитель получает уведомления для групп всех своих детей (1 ребёнок или несколько)
+                children = get_parent_children(user)
+                if not children:
                     return Response({
                         'notifications': []
                     }, status=status.HTTP_200_OK)
-                
+                group_ids = [c.group_id for c in children if c.group_id]
+                if not group_ids:
+                    return Response({
+                        'notifications': []
+                    }, status=status.HTTP_200_OK)
                 notifications = ScheduleChangeNotification.objects.filter(
-                    training__group=user.linked_child.group
-                ).order_by('-created_at')[:10]  # Последние 10 уведомлений
+                    training__group_id__in=group_ids
+                ).order_by('-created_at')[:20]
                 
             elif user.role == 'trainer':
                 # Тренер получает уведомления для своих групп
@@ -2310,7 +2436,8 @@ class MarkNotificationReadApiView(APIView):
             # Проверяем, имеет ли пользователь доступ к этому уведомлению
             has_access = False
             if user.role == 'parent':
-                if user.linked_child and user.linked_child.group == notification.training.group:
+                children = get_parent_children(user)
+                if notification.training.group_id and any(c.group_id == notification.training.group_id for c in children):
                     has_access = True
             elif user.role == 'trainer':
                 if user.linked_trainer and notification.training.group in user.linked_trainer.groups.all():
@@ -2363,20 +2490,41 @@ class PaymentInvoicesApiView(APIView):
                     'error': 'Доступ разрешен только родителям'
                 }, status=status.HTTP_403_FORBIDDEN)
             
-            if not user.linked_child:
+            children = get_parent_children(user)
+            if not children:
                 return Response({
                     'error': 'У пользователя нет привязанного ребенка'
                 }, status=status.HTTP_404_NOT_FOUND)
             
-            # Получаем все счета для ребенка, отсортированные по дате
+            child_ids = [c.id for c in children]
+            child_id_param = request.GET.get('child_id')
+            if child_id_param:
+                try:
+                    cid = int(child_id_param)
+                    if cid not in child_ids:
+                        return Response({'error': 'Недопустимый child_id'}, status=status.HTTP_400_BAD_REQUEST)
+                    child_ids = [cid]
+                except (ValueError, TypeError):
+                    pass
+            
             invoices = PaymentInvoice.objects.filter(
-                child=user.linked_child
-            ).order_by('-invoice_month')
+                child_id__in=child_ids
+            ).select_related('child').prefetch_related('receipts').order_by('-invoice_month')
+
+            unpaid_statuses = ('pending', 'overdue')
+            unpaid_invoices = [inv for inv in invoices if inv.status in unpaid_statuses]
+            unpaid_months_count = len(unpaid_invoices)
+            total_unpaid_amount = sum(float(inv.total_amount) for inv in unpaid_invoices)
             
             invoices_data = []
             for invoice in invoices:
-                invoices_data.append({
+                receipts = list(invoice.receipts.all())
+                latest_receipt = receipts[0] if receipts else None
+                rec_parsed = latest_receipt if latest_receipt else None
+                inv_item = {
                     'id': invoice.id,
+                    'child_id': invoice.child_id,
+                    'child_name': invoice.child.full_name,
                     'invoice_month': invoice.invoice_month.strftime('%Y-%m-%d'),
                     'invoice_month_display': self.format_month_ru(invoice.invoice_month),
                     'total_trainings': invoice.total_trainings,
@@ -2389,12 +2537,24 @@ class PaymentInvoicesApiView(APIView):
                     'generated_at': invoice.generated_at.strftime('%Y-%m-%d %H:%M:%S'),
                     'due_date': invoice.due_date.strftime('%Y-%m-%d'),
                     'paid_at': invoice.paid_at.strftime('%Y-%m-%d %H:%M:%S') if invoice.paid_at else None,
-                    'notes': invoice.notes
-                })
+                    'notes': invoice.notes,
+                    'receipt_status': latest_receipt.status if latest_receipt else None,
+                    'receipt_status_display': latest_receipt.get_status_display() if latest_receipt else None,
+                }
+                if rec_parsed and rec_parsed.parsed_amount is not None:
+                    inv_item['receipt_parsed_amount'] = float(rec_parsed.parsed_amount)
+                    inv_item['receipt_amount_match'] = rec_parsed.amount_match
+                    inv_item['receipt_parsed_bank'] = rec_parsed.get_parsed_bank_display() if rec_parsed.parsed_bank else None
+                invoices_data.append(inv_item)
+
+            global_qr = GlobalPaymentQR.objects.first()
+            global_qr_code_url = request.build_absolute_uri(global_qr.qr_code.url) if global_qr and global_qr.qr_code else None
             
             return Response({
                 'invoices': invoices_data,
-                'child_name': user.linked_child.full_name
+                'unpaid_months_count': unpaid_months_count,
+                'total_unpaid_amount': round(total_unpaid_amount, 2),
+                'global_qr_code_url': global_qr_code_url,
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
@@ -2404,6 +2564,298 @@ class PaymentInvoicesApiView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class ParentUploadPaymentReceiptApiView(APIView):
+    """Родитель загружает чек по счёту для подтверждения оплаты."""
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        try:
+            user = request.user
+            if user.role != 'parent':
+                return Response({'error': 'Доступ только для родителя'}, status=status.HTTP_403_FORBIDDEN)
+            children = get_parent_children(user)
+            if not children:
+                return Response({'error': 'Ребенок не найден'}, status=status.HTTP_404_NOT_FOUND)
+            invoice_id = request.data.get('invoice_id')
+            if invoice_id is None:
+                return Response({'error': 'Укажите invoice_id'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                invoice_id = int(invoice_id)
+            except (ValueError, TypeError):
+                return Response({'error': 'Некорректный invoice_id'}, status=status.HTTP_400_BAD_REQUEST)
+            if 'receipt_file' not in request.FILES:
+                return Response({'error': 'Прикрепите файл чека'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                invoice = PaymentInvoice.objects.get(id=invoice_id)
+            except PaymentInvoice.DoesNotExist:
+                return Response({'error': 'Счет не найден'}, status=status.HTTP_404_NOT_FOUND)
+            if invoice.child_id not in [c.id for c in children]:
+                return Response({'error': 'Нет доступа к этому счету'}, status=status.HTTP_403_FORBIDDEN)
+            if invoice.status == 'paid':
+                return Response({'error': 'Счет уже оплачен'}, status=status.HTTP_400_BAD_REQUEST)
+            receipt = PaymentReceipt.objects.create(
+                invoice=invoice,
+                uploaded_by=user,
+                receipt_file=request.FILES['receipt_file'],
+                status='pending',
+            )
+            # Распознать данные с чека для проверки суммы
+            try:
+                from .receipt_parser import parse_receipt_file
+                file_path = receipt.receipt_file.path
+            except (ValueError, NotImplementedError):
+                file_path = None
+            if file_path:
+                try:
+                    parsed = parse_receipt_file(file_path, invoice.total_amount)
+                    receipt.parsed_amount = parsed.get('parsed_amount')
+                    receipt.parsed_date = parsed.get('parsed_date')
+                    receipt.parsed_bank = parsed.get('parsed_bank')
+                    receipt.amount_match = parsed.get('amount_match')
+                    receipt.parsed_raw_preview = (parsed.get('raw_preview') or '')[:2000]
+                    receipt.save(update_fields=['parsed_amount', 'parsed_date', 'parsed_bank', 'amount_match', 'parsed_raw_preview'])
+                except Exception as e:
+                    print(f"Ошибка парсинга чека: {e}")
+            response_data = {
+                'success': True,
+                'message': 'Чек загружен и отправлен на проверку',
+                'receipt_id': receipt.id,
+                'status': receipt.status,
+            }
+            if receipt.parsed_amount is not None:
+                response_data['parsed_amount'] = float(receipt.parsed_amount)
+                response_data['invoice_amount'] = float(invoice.total_amount)
+                response_data['amount_match'] = receipt.amount_match
+                response_data['parsed_bank'] = receipt.get_parsed_bank_display() if receipt.parsed_bank else None
+                response_data['parsed_date'] = receipt.parsed_date.strftime('%d.%m.%Y') if receipt.parsed_date else None
+            return Response(response_data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            print(f"Ошибка загрузки чека: {e}")
+            return Response({'error': 'Внутренняя ошибка сервера'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AdminPaymentReceiptsApiView(APIView):
+    """Админ: список чеков на проверку, подтверждение и отклонение."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            if request.user.role != 'admin':
+                return Response({'error': 'Доступ только для администратора'}, status=status.HTTP_403_FORBIDDEN)
+            status_filter = request.GET.get('status', 'pending')
+            receipts = PaymentReceipt.objects.filter(
+                status=status_filter
+            ).select_related('invoice', 'invoice__child', 'uploaded_by').order_by('-created_at')[:100]
+            data = []
+            for r in receipts:
+                item = {
+                    'id': r.id,
+                    'invoice_id': r.invoice_id,
+                    'child_name': r.invoice.child.full_name,
+                    'invoice_month': r.invoice.invoice_month.strftime('%Y-%m'),
+                    'total_amount': float(r.invoice.total_amount),
+                    'uploaded_by': r.uploaded_by.username,
+                    'created_at': r.created_at.strftime('%d.%m.%Y %H:%M'),
+                    'status': r.status,
+                    'receipt_url': request.build_absolute_uri(r.receipt_file.url) if r.receipt_file else None,
+                    'admin_comment': r.admin_comment,
+                }
+                if r.parsed_amount is not None:
+                    item['parsed_amount'] = float(r.parsed_amount)
+                    item['amount_match'] = r.amount_match
+                    item['parsed_bank'] = r.get_parsed_bank_display() if r.parsed_bank else None
+                    item['parsed_date'] = r.parsed_date.strftime('%d.%m.%Y') if r.parsed_date else None
+                    item['parsed_raw_preview'] = (r.parsed_raw_preview or '')[:500]
+                data.append(item)
+            return Response({'receipts': data}, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Ошибка списка чеков: {e}")
+            return Response({'error': 'Внутренняя ошибка сервера'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request):
+        """Подтвердить или отклонить чек. В теле: receipt_id, action: 'approve' | 'reject', admin_comment (опционально)."""
+        try:
+            if request.user.role != 'admin':
+                return Response({'error': 'Доступ только для администратора'}, status=status.HTTP_403_FORBIDDEN)
+            receipt_id = request.data.get('receipt_id')
+            action = request.data.get('action')
+            admin_comment = request.data.get('admin_comment', '')
+            if not receipt_id or action not in ('approve', 'reject'):
+                return Response({'error': 'Укажите receipt_id и action: approve или reject'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                receipt = PaymentReceipt.objects.select_related('invoice').get(id=receipt_id)
+            except PaymentReceipt.DoesNotExist:
+                return Response({'error': 'Чек не найден'}, status=status.HTTP_404_NOT_FOUND)
+            if receipt.status != 'pending':
+                return Response({'error': 'Чек уже обработан'}, status=status.HTTP_400_BAD_REQUEST)
+            receipt.admin_comment = admin_comment
+            receipt.reviewed_at = timezone.now()
+            receipt.reviewed_by = request.user
+            if action == 'approve':
+                receipt.status = 'approved'
+                receipt.save()
+                invoice = receipt.invoice
+                invoice.status = 'paid'
+                invoice.paid_at = timezone.now()
+                invoice.save(update_fields=['status', 'paid_at'])
+                return Response({'success': True, 'message': 'Оплата подтверждена'}, status=status.HTTP_200_OK)
+            else:
+                receipt.status = 'rejected'
+                receipt.save()
+                return Response({'success': True, 'message': 'Чек отклонен'}, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Ошибка обработки чека: {e}")
+            return Response({'error': 'Внутренняя ошибка сервера'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AdminOverdueInvoicesApiView(APIView):
+    """
+    API для администратора: список родителей с непогашенными счетами за несколько месяцев.
+    GET: Родители (ребёнок + контакт), у которых 2 и более месяцев не оплачены счета.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user = request.user
+            if user.role != 'admin':
+                return Response({'error': 'Доступ разрешен только администраторам'}, status=status.HTTP_403_FORBIDDEN)
+
+            unpaid_statuses = ('pending', 'overdue')
+            # Дети, у которых есть хотя бы один неоплаченный счёт
+            children_with_unpaid = (
+                PaymentInvoice.objects.filter(status__in=unpaid_statuses)
+                .values_list('child_id', flat=True)
+                .distinct()
+            )
+            result = []
+            for child_id in children_with_unpaid:
+                child = Child.objects.select_related('parent_name').get(id=child_id)
+                unpaid = PaymentInvoice.objects.filter(
+                    child=child, status__in=unpaid_statuses
+                )
+                count = unpaid.count()
+                if count < 2:
+                    continue
+                total = sum(float(inv.total_amount) for inv in unpaid)
+                parent_user = User.objects.filter(role='parent', linked_child=child).first()
+                parent_phone = (child.parent_name.phone or '') if child.parent_name else ''
+                result.append({
+                    'child_id': child.id,
+                    'child_name': child.full_name,
+                    'parent_username': parent_user.username if parent_user else '',
+                    'parent_phone': parent_phone,
+                    'unpaid_months_count': count,
+                    'total_unpaid_amount': round(total, 2),
+                })
+            return Response({'overdue_parents': result}, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Ошибка при получении списка должников: {e}")
+            return Response({'error': 'Внутренняя ошибка сервера'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AdminInvoicesListApiView(APIView):
+    """Список счетов для админа (для привязки QR)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            if request.user.role != 'admin':
+                return Response({'error': 'Доступ только для администратора'}, status=status.HTTP_403_FORBIDDEN)
+            status_filter = request.GET.get('status')  # pending, paid, overdue, пусто = все
+            qs = PaymentInvoice.objects.select_related('child').order_by('-invoice_month', 'child__full_name')
+            if status_filter:
+                qs = qs.filter(status=status_filter)
+            qs = qs[:200]
+            months_ru = [
+                'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+            ]
+            data = []
+            for inv in qs:
+                data.append({
+                    'id': inv.id,
+                    'child_name': inv.child.full_name,
+                    'invoice_month': inv.invoice_month.strftime('%Y-%m'),
+                    'invoice_month_display': f"{months_ru[inv.invoice_month.month - 1]} {inv.invoice_month.year}",
+                    'total_amount': float(inv.total_amount),
+                    'status': inv.status,
+                    'status_display': inv.get_status_display(),
+                    'has_qr': bool(inv.qr_code),
+                    'qr_code_url': request.build_absolute_uri(inv.qr_code.url) if inv.qr_code else None,
+                })
+            return Response({'invoices': data}, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Ошибка списка счетов: {e}")
+            return Response({'error': 'Внутренняя ошибка сервера'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AdminInvoiceQRUploadApiView(APIView):
+    """Загрузка QR-кода для счёта (админ)."""
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, invoice_id):
+        try:
+            if request.user.role != 'admin':
+                return Response({'error': 'Доступ только для администратора'}, status=status.HTTP_403_FORBIDDEN)
+            if 'qr_file' not in request.FILES and 'qr_code' not in request.FILES:
+                return Response({'error': 'Прикрепите файл QR-кода (qr_file или qr_code)'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                invoice = PaymentInvoice.objects.get(id=invoice_id)
+            except PaymentInvoice.DoesNotExist:
+                return Response({'error': 'Счет не найден'}, status=status.HTTP_404_NOT_FOUND)
+            file_key = 'qr_file' if 'qr_file' in request.FILES else 'qr_code'
+            invoice.qr_code = request.FILES[file_key]
+            invoice.save(update_fields=['qr_code'])
+            return Response({
+                'success': True,
+                'message': 'QR-код загружен',
+                'qr_code_url': request.build_absolute_uri(invoice.qr_code.url),
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Ошибка загрузки QR: {e}")
+            return Response({'error': 'Внутренняя ошибка сервера'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GlobalPaymentQRApiView(APIView):
+    """Один общий QR для оплаты (для родителей и админа)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        global_qr = GlobalPaymentQR.objects.first()
+        qr_code_url = None
+        if global_qr and global_qr.qr_code:
+            qr_code_url = request.build_absolute_uri(global_qr.qr_code.url)
+        return Response({'qr_code_url': qr_code_url}, status=status.HTTP_200_OK)
+
+
+class AdminGlobalPaymentQRUploadApiView(APIView):
+    """Загрузка одного общего QR для оплаты (только админ)."""
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        try:
+            if request.user.role != 'admin':
+                return Response({'error': 'Доступ только для администратора'}, status=status.HTTP_403_FORBIDDEN)
+            if 'qr_file' not in request.FILES and 'qr_code' not in request.FILES:
+                return Response({'error': 'Прикрепите файл QR-кода (qr_file или qr_code)'}, status=status.HTTP_400_BAD_REQUEST)
+            global_qr, _ = GlobalPaymentQR.objects.get_or_create(pk=1, defaults={})
+            file_key = 'qr_file' if 'qr_file' in request.FILES else 'qr_code'
+            global_qr.qr_code = request.FILES[file_key]
+            global_qr.save(update_fields=['qr_code'])
+            return Response({
+                'success': True,
+                'message': 'Общий QR-код загружен',
+                'qr_code_url': request.build_absolute_uri(global_qr.qr_code.url),
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"Ошибка загрузки общего QR: {e}")
+            return Response({'error': 'Внутренняя ошибка сервера'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class GenerateInvoiceApiView(APIView):
     """
     API для генерации счетов (только для админов).
@@ -2411,7 +2863,7 @@ class GenerateInvoiceApiView(APIView):
     POST: Сгенерировать счета на следующий месяц
     """
     permission_classes = [IsAuthenticated]
-    
+
     def post(self, request):
         try:
             user = request.user

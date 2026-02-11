@@ -14,7 +14,7 @@ from fotball.models import MedicalCertificate, User, Child
 
 # Создаем тестовую справку
 try:
-    parent = User.objects.get(username='Parenttest')
+    parent = User.objects.get(username='Parent')
     child = parent.linked_child
     
     if child:

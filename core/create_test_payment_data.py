@@ -1,8 +1,3 @@
-#!/usr/bin/env python
-"""
-Скрипт для создания тестовых данных по оплате.
-"""
-
 import os
 import sys
 import django

@@ -3,11 +3,15 @@ from .views import (
     LoginApiView, UserInfoApiView, LogOutApiView, TestView, 
     TrainerGroupsApiView, GroupDetailApiView, TrainerAttendanceApiView, 
     GroupAttendanceApiView, AttendanceHistoryApiView, ParentChildInfoApiView,
-    ParentAttendanceApiView, ParentNextTrainingApiView, ParentCommentsApiView,
+    ParentAttendanceApiView, ParentNextTrainingApiView,     ParentCommentsApiView,
+    ParentCommentsMarkReadApiView,
     ParentPaymentCalculationApiView, ParentMedicalCertificatesApiView, AdminMedicalCertificatesApiView,
     AdminApproveMedicalCertificateApiView, AdminRejectMedicalCertificateApiView,
     AdminScheduleApiView, ScheduleApiView, TrainerCommentsApiView, ScheduleNotificationsApiView, MarkNotificationReadApiView,
-    PaymentInvoicesApiView, GenerateInvoiceApiView, PaymentSettingsApiView, TrainingCancellationNotificationsApiView, AdminAttendanceApiView, AdminGroupChildrenApiView, AdminAttendanceTableApiView
+    PaymentInvoicesApiView, ParentUploadPaymentReceiptApiView, AdminPaymentReceiptsApiView,
+    AdminInvoicesListApiView, AdminInvoiceQRUploadApiView,
+    GlobalPaymentQRApiView, AdminGlobalPaymentQRUploadApiView,
+    GenerateInvoiceApiView, PaymentSettingsApiView, TrainingCancellationNotificationsApiView, AdminAttendanceApiView, AdminGroupChildrenApiView, AdminAttendanceTableApiView, AdminOverdueInvoicesApiView
 )
 
 
@@ -27,6 +31,7 @@ urlpatterns = [
     path('api/parent/attendance/', ParentAttendanceApiView.as_view(), name='api-parent-attendance'),
     path('api/parent/next-training/', ParentNextTrainingApiView.as_view(), name='api-parent-next-training'),
     path('api/parent/comments/', ParentCommentsApiView.as_view(), name='api-parent-comments'),
+    path('api/parent/comments/mark-read/', ParentCommentsMarkReadApiView.as_view(), name='api-parent-comments-mark-read'),
     path('api/parent/payment-calculation/', ParentPaymentCalculationApiView.as_view(), name='api-parent-payment-calculation'),
     path('api/parent/medical-certificates/', ParentMedicalCertificatesApiView.as_view(), name='api-parent-medical-certificates'),
     # Admin API endpoints
@@ -41,8 +46,15 @@ urlpatterns = [
     path('api/schedule/notifications/<int:notification_id>/read/', MarkNotificationReadApiView.as_view(), name='api-mark-notification-read'),
     # Payment API endpoints
     path('api/parent/invoices/', PaymentInvoicesApiView.as_view(), name='api-parent-invoices'),
+    path('api/parent/invoices/upload-receipt/', ParentUploadPaymentReceiptApiView.as_view(), name='api-parent-upload-receipt'),
+    path('api/admin/payment-receipts/', AdminPaymentReceiptsApiView.as_view(), name='api-admin-payment-receipts'),
+    path('api/admin/invoices/', AdminInvoicesListApiView.as_view(), name='api-admin-invoices-list'),
+    path('api/admin/invoices/<int:invoice_id>/upload-qr/', AdminInvoiceQRUploadApiView.as_view(), name='api-admin-invoice-upload-qr'),
+    path('api/payment-qr/', GlobalPaymentQRApiView.as_view(), name='api-payment-qr'),
+    path('api/admin/payment-qr/upload/', AdminGlobalPaymentQRUploadApiView.as_view(), name='api-admin-payment-qr-upload'),
     path('api/admin/generate-invoices/', GenerateInvoiceApiView.as_view(), name='api-admin-generate-invoices'),
     path('api/admin/payment-settings/', PaymentSettingsApiView.as_view(), name='api-admin-payment-settings'),
+    path('api/admin/overdue-invoices/', AdminOverdueInvoicesApiView.as_view(), name='api-admin-overdue-invoices'),
     path('api/training-cancellation-notifications/', TrainingCancellationNotificationsApiView.as_view(), name='api-training-cancellation-notifications'),
     path('api/admin/attendance/', AdminAttendanceApiView.as_view(), name='api-admin-attendance'),
     path('api/admin/attendance-table/', AdminAttendanceTableApiView.as_view(), name='api-admin-attendance-table'),

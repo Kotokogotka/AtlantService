@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Child, Trainer, GroupKidGarden, Attendance, User, Parent, TrainingRate, MedicalCertificate, TrainingSchedule, TrainerComment, ScheduleChangeNotification, NotificationRead, PaymentSettings, PaymentInvoice, TrainingCancellationNotification
+from .models import Child, Trainer, GroupKidGarden, Attendance, User, Parent, TrainingRate, MedicalCertificate, TrainingSchedule, TrainerComment, ScheduleChangeNotification, NotificationRead, PaymentSettings, GlobalPaymentQR, PaymentInvoice, PaymentReceipt, TrainingCancellationNotification
 
 
 @admin.register(User)
@@ -286,6 +286,20 @@ class PaymentSettingsAdmin(admin.ModelAdmin):
     )
 
 
+@admin.register(GlobalPaymentQR)
+class GlobalPaymentQRAdmin(admin.ModelAdmin):
+    list_display = ('id', 'has_qr_display')
+    fields = ('qr_code',)
+    verbose_name_plural = 'Общий QR для оплаты'
+
+    def has_qr_display(self, obj):
+        return 'Да' if obj and obj.qr_code else 'Нет'
+    has_qr_display.short_description = 'QR загружен'
+
+    def has_add_permission(self, request):
+        return not GlobalPaymentQR.objects.exists()
+
+
 @admin.register(PaymentInvoice)
 class PaymentInvoiceAdmin(admin.ModelAdmin):
     list_display = ('child', 'invoice_month_display', 'total_trainings', 'confirmed_absences', 'billable_trainings', 'total_amount', 'status', 'generated_at')
@@ -303,6 +317,10 @@ class PaymentInvoiceAdmin(admin.ModelAdmin):
         }),
         ('Статус оплаты', {
             'fields': ('status', 'paid_at', 'notes')
+        }),
+        ('QR для оплаты', {
+            'fields': ('qr_code',),
+            'description': 'Загрузите QR-код для оплаты по этому счёту (родитель увидит его в личном кабинете).'
         }),
         ('Системная информация', {
             'fields': ('generated_at',),
@@ -333,6 +351,24 @@ class PaymentInvoiceAdmin(admin.ModelAdmin):
         updated = queryset.update(status='overdue')
         self.message_user(request, f'Отмечено как просроченные: {updated} счетов.')
     mark_as_overdue.short_description = 'Отметить как просроченные'
+
+
+@admin.register(PaymentReceipt)
+class PaymentReceiptAdmin(admin.ModelAdmin):
+    list_display = ('id', 'invoice', 'uploaded_by', 'status', 'parsed_amount', 'amount_match', 'parsed_bank', 'created_at', 'reviewed_at')
+    list_filter = ('status', 'amount_match', 'parsed_bank', 'created_at')
+    search_fields = ('invoice__child__full_name', 'uploaded_by__username')
+    readonly_fields = ('invoice', 'uploaded_by', 'receipt_file', 'created_at', 'reviewed_at', 'reviewed_by', 'parsed_amount', 'parsed_date', 'parsed_bank', 'amount_match', 'parsed_raw_preview')
+    date_hierarchy = 'created_at'
+    fieldsets = (
+        (None, {'fields': ('invoice', 'uploaded_by', 'receipt_file', 'status', 'admin_comment')}),
+        ('Распознанные данные с чека', {
+            'fields': ('parsed_amount', 'parsed_date', 'parsed_bank', 'amount_match', 'parsed_raw_preview'),
+            'description': 'Автоматически заполняется при загрузке. Сумма с чека сравнивается со счётом.'
+        }),
+        ('Проверка', {'fields': ('reviewed_at', 'reviewed_by')}),
+        ('Даты', {'fields': ('created_at',)}),
+    )
 
 
 @admin.register(TrainingCancellationNotification)
