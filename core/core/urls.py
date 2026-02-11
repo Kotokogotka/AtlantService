@@ -19,12 +19,11 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 
-from .views import ServeReactAppView, ServeBuildStaticView
+from .views import ServeReactAppView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('fotball.urls')),
-    path('static/<path:path>', ServeBuildStaticView.as_view(), name='build_static'),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

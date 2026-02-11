@@ -5,5 +5,5 @@ services:
   - type: web
     name: atlantservice
     runtime: python
-    buildCommand: pip install -r requirements.txt && cd front_football && npm install && npm run build
+    buildCommand: pip install -r requirements.txt && cd front_football && npm install && npm run build && cd ../core && python manage.py collectstatic --noinput
     startCommand: ./run.sh

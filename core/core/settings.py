@@ -75,6 +75,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -227,8 +228,12 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
-
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+# Явный абсолютный путь (строка) — иначе на Render collectstatic падает с "STATIC_ROOT not set"
+STATIC_ROOT = str((BASE_DIR / 'staticfiles').resolve())
+# Статика React (build/static) собирается в STATIC_ROOT через collectstatic
+if FRONTEND_BUILD_DIR.joinpath('static').is_dir():
+    STATICFILES_DIRS = [str(FRONTEND_BUILD_DIR / 'static')]
 
 # Media files (uploads). На хостинге можно задать MEDIA_ROOT в .env при необходимости
 MEDIA_URL = env('MEDIA_URL', '/media/')

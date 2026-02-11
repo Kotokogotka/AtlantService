@@ -39,6 +39,12 @@ fi
 cd "$ROOT/core"
 export PYTHONPATH="$ROOT/core:${PYTHONPATH:-}"
 
+# Миграции БД (на Render при каждом деплое создаётся чистая БД)
+python manage.py migrate --noinput
+
+# Начальные админы (Kotokogotka, Osip) — создаются только если ещё нет
+python manage.py create_initial_superusers
+
 # На Render порт задаётся через переменную PORT; локально используем 8000
 PORT="${PORT:-8000}"
 echo "Запуск Gunicorn на порту $PORT"

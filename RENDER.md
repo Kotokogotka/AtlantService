@@ -6,7 +6,7 @@
 
 1. **Build Command** (обязательно укажите):
    ```bash
-   pip install -r requirements.txt && cd front_football && npm install && npm run build
+   pip install -r requirements.txt && cd front_football && npm install && npm run build && cd ../core && python manage.py collectstatic --noinput
    ```
 
 2. **Start Command**:
