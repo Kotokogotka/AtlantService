@@ -27,6 +27,7 @@ class User(models.Model):
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, verbose_name="Роль пользователя")
     linked_trainer = models.ForeignKey('Trainer', null=True, blank=True, on_delete=models.SET_NULL, related_name='users_linked')
     linked_child = models.ForeignKey('Child', null=True, blank=True, on_delete=models.SET_NULL, related_name='users_linked')
+    last_login = models.DateTimeField(null=True, blank=True, verbose_name="Последний вход")
 
     # Атрибуты для входа в Django Admin (admin.site.login проверяет is_active, is_staff)
     @property

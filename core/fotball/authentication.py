@@ -42,21 +42,11 @@ class CustomJWTAuthentication(JWTAuthentication):
     """
     
     def get_user(self, validated_token):
-        """
-        Получаем пользователя из токена
-        """
-        print(f"DEBUG: JWT Token payload: {validated_token}")
+        """Получаем пользователя из токена."""
         user_id = validated_token.get('user_id')
-        print(f"DEBUG: User ID from token: {user_id}")
-        
         if user_id is None:
-            print("DEBUG: No user_id in token")
             return None
-        
         try:
-            user = User.objects.get(pk=user_id)
-            print(f"DEBUG: Found user: {user.username}")
-            return user
+            return User.objects.get(pk=user_id)
         except User.DoesNotExist:
-            print(f"DEBUG: User with ID {user_id} not found")
             return None
