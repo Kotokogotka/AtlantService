@@ -5,6 +5,45 @@ from django.utils.html import format_html
 from .models import Child, Trainer, GroupKidGarden, Attendance, User, Parent, TrainingRate, MedicalCertificate, TrainingSchedule, TrainerComment, ScheduleChangeNotification, NotificationRead, PaymentSettings, GlobalPaymentQR, PaymentInvoice, PaymentReceipt, TrainingCancellationNotification
 
 
+class SafeFkM2MAdminMixin:
+    """
+    Миксин для всех админок: перед сохранением «чистим» FK (если ссылка не существует — в null),
+    при сохранении M2M выставляем только существующие id. Устраняет IntegrityError при popup/пустой БД.
+    """
+    def save_model(self, request, obj, form, change):
+        model = obj._meta.model
+        for f in model._meta.get_fields():
+            if not (f.many_to_one and f.concrete) and not (f.one_to_one and f.concrete):
+                continue
+            if not getattr(f, 'attname', None):
+                continue
+            pk = getattr(obj, f.attname, None)
+            if pk is None:
+                continue
+            related_model = getattr(f, 'related_model', None)
+            if not related_model or not related_model.objects.filter(pk=pk).exists():
+                if getattr(f, 'null', False):
+                    setattr(obj, f.attname, None)
+        super().save_model(request, obj, form, change)
+
+    def save_related(self, request, form, formsets, change):
+        def safe_save_m2m():
+            obj = form.instance
+            for f in obj._meta.many_to_many:
+                if f.name not in form.cleaned_data:
+                    continue
+                related_model = f.related_model
+                values = form.cleaned_data[f.name]
+                if values is None:
+                    getattr(obj, f.name).clear()
+                    continue
+                pks = [getattr(x, 'pk', x) for x in values]
+                existing = list(related_model.objects.filter(pk__in=pks).values_list('pk', flat=True))
+                getattr(obj, f.name).set(existing)
+        form.save_m2m = safe_save_m2m
+        super().save_related(request, form, formsets, change)
+
+
 class UserAdminForm(forms.ModelForm):
     """Форма с полем для ввода нового пароля (сохраняется в виде хэша)."""
     password = forms.CharField(
@@ -37,7 +76,7 @@ class UserAdminForm(forms.ModelForm):
 
 
 @admin.register(User)
-class UserAdmin(admin.ModelAdmin):
+class UserAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     form = UserAdminForm
     list_display = ('username', 'role', 'linked_trainer', 'linked_child')
     list_filter = ('role',)
@@ -56,7 +95,7 @@ class UserAdmin(admin.ModelAdmin):
 
 
 @admin.register(Trainer)
-class TrainerAdmin(admin.ModelAdmin):
+class TrainerAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('full_name', 'phone', 'work_space', 'get_groups_count')
     search_fields = ('full_name', 'phone', 'work_space')
     list_filter = ('groups__kindergarten_number',)
@@ -79,7 +118,7 @@ class TrainerAdmin(admin.ModelAdmin):
 
 
 @admin.register(GroupKidGarden)
-class GroupKidGardenAdmin(admin.ModelAdmin):
+class GroupKidGardenAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('name', 'kindergarten_number', 'age_level', 'get_trainers')
     list_filter = ('age_level', 'kindergarten_number')
     search_fields = ('name', 'kindergarten_number')
@@ -99,7 +138,7 @@ class GroupKidGardenAdmin(admin.ModelAdmin):
 
 
 @admin.register(Parent)
-class ParentAdmin(admin.ModelAdmin):
+class ParentAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('full_name', 'phone', 'get_children_count')
     search_fields = ('full_name', 'phone')
     
@@ -119,11 +158,10 @@ class ParentAdmin(admin.ModelAdmin):
         return obj.children.count()
     get_children_count.short_description = 'Количество детей'
 
-    
 
 
 @admin.register(Child)
-class ChildAdmin(admin.ModelAdmin):
+class ChildAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('full_name', 'birth_date', 'parent_name', 'group', 'is_active')
     list_filter = ('is_active', 'group', 'birth_date')
     search_fields = ('full_name', 'parent_name__full_name')
@@ -141,7 +179,7 @@ class ChildAdmin(admin.ModelAdmin):
 
 
 @admin.register(Attendance)
-class AttendanceAdmin(admin.ModelAdmin):
+class AttendanceAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('child', 'group', 'date', 'status', 'reason_short')
     list_filter = ('status', 'date', 'group', 'child')
     search_fields = ('child__full_name', 'reason')
@@ -165,7 +203,7 @@ class AttendanceAdmin(admin.ModelAdmin):
 
 
 @admin.register(TrainingRate)
-class TrainingRateAdmin(admin.ModelAdmin):
+class TrainingRateAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('group', 'price', 'active_form')
     list_filter = ('active_form', 'group')
     search_fields = ('group__name',)
@@ -179,7 +217,7 @@ class TrainingRateAdmin(admin.ModelAdmin):
 
 
 @admin.register(MedicalCertificate)
-class MedicalCertificateAdmin(admin.ModelAdmin):
+class MedicalCertificateAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('child', 'parent', 'date_from', 'date_to', 'status', 'total_cost', 'uploaded_at')
     list_filter = ('status', 'uploaded_at', 'date_from', 'date_to')
     search_fields = ('child__full_name', 'parent__username', 'note', 'absence_reason')
@@ -213,7 +251,7 @@ class MedicalCertificateAdmin(admin.ModelAdmin):
 
 
 @admin.register(TrainingSchedule)
-class TrainingScheduleAdmin(admin.ModelAdmin):
+class TrainingScheduleAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('group', 'date', 'time', 'trainer', 'status', 'created_by', 'created_at')
     list_filter = ('status', 'date', 'group', 'trainer', 'created_at')
     search_fields = ('group__name', 'trainer__full_name', 'location', 'notes')
@@ -239,7 +277,7 @@ class TrainingScheduleAdmin(admin.ModelAdmin):
 
 
 @admin.register(TrainerComment)
-class TrainerCommentAdmin(admin.ModelAdmin):
+class TrainerCommentAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('trainer', 'child', 'comment_preview', 'created_at')
     list_filter = ('trainer', 'created_at')
     search_fields = ('trainer__full_name', 'child__full_name', 'comment_text')
@@ -261,7 +299,7 @@ class TrainerCommentAdmin(admin.ModelAdmin):
 
 
 @admin.register(ScheduleChangeNotification)
-class ScheduleChangeNotificationAdmin(admin.ModelAdmin):
+class ScheduleChangeNotificationAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('training', 'notification_type', 'message_preview', 'created_by', 'created_at', 'is_read_by_trainer')
     list_filter = ('notification_type', 'created_at', 'is_read_by_trainer')
     search_fields = ('training__group__name', 'message', 'created_by__username')
@@ -287,7 +325,7 @@ class ScheduleChangeNotificationAdmin(admin.ModelAdmin):
 
 
 @admin.register(NotificationRead)
-class NotificationReadAdmin(admin.ModelAdmin):
+class NotificationReadAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('user', 'notification_preview', 'read_at')
     list_filter = ('read_at',)
     search_fields = ('user__username', 'notification__message')
@@ -299,7 +337,7 @@ class NotificationReadAdmin(admin.ModelAdmin):
 
 
 @admin.register(PaymentSettings)
-class PaymentSettingsAdmin(admin.ModelAdmin):
+class PaymentSettingsAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('kindergarten', 'price_per_training', 'default_trainings_per_month', 'invoice_generation_day', 'is_active')
     list_filter = ('is_active', 'created_at')
     search_fields = ('kindergarten__name', 'kindergarten__kindergarten_number')
@@ -320,7 +358,7 @@ class PaymentSettingsAdmin(admin.ModelAdmin):
 
 
 @admin.register(GlobalPaymentQR)
-class GlobalPaymentQRAdmin(admin.ModelAdmin):
+class GlobalPaymentQRAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('id', 'has_qr_display')
     fields = ('qr_code',)
     verbose_name_plural = 'Общий QR для оплаты'
@@ -334,7 +372,7 @@ class GlobalPaymentQRAdmin(admin.ModelAdmin):
 
 
 @admin.register(PaymentInvoice)
-class PaymentInvoiceAdmin(admin.ModelAdmin):
+class PaymentInvoiceAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('child', 'invoice_month_display', 'total_trainings', 'confirmed_absences', 'billable_trainings', 'total_amount', 'status', 'generated_at')
     list_filter = ('status', 'invoice_month', 'generated_at', 'child__group')
     search_fields = ('child__full_name', 'child__parent_name__full_name')
@@ -387,7 +425,7 @@ class PaymentInvoiceAdmin(admin.ModelAdmin):
 
 
 @admin.register(PaymentReceipt)
-class PaymentReceiptAdmin(admin.ModelAdmin):
+class PaymentReceiptAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('id', 'invoice', 'uploaded_by', 'status', 'parsed_amount', 'amount_match', 'parsed_bank', 'created_at', 'reviewed_at')
     list_filter = ('status', 'amount_match', 'parsed_bank', 'created_at')
     search_fields = ('invoice__child__full_name', 'uploaded_by__username')
@@ -405,7 +443,7 @@ class PaymentReceiptAdmin(admin.ModelAdmin):
 
 
 @admin.register(TrainingCancellationNotification)
-class TrainingCancellationNotificationAdmin(admin.ModelAdmin):
+class TrainingCancellationNotificationAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
     list_display = ('group', 'cancelled_date', 'cancelled_time', 'reason_short', 'created_by', 'created_at', 'is_read_by_trainer', 'is_read_by_parents', 'affects_payment')
     list_filter = ('created_at', 'is_read_by_trainer', 'is_read_by_parents', 'affects_payment', 'group')
     search_fields = ('group__name', 'reason', 'created_by__username')
