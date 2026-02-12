@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth.hashers import make_password
 from django.utils import timezone
 
@@ -50,30 +50,37 @@ class User(models.Model):
         # Сохраняем пользователя
         super().save(*args, **kwargs)
 
-        # Если это роль тренера и у него нет связанного тренера, то создаем его
-        if self.role == 'trainer' and not self.linked_trainer:
-            trainer, created = Trainer.objects.get_or_create(
-                full_name=f'Тренер {self.username}',
-                defaults={
-                    'phone': ''
-                }
-            )
-            self.linked_trainer = trainer
-            self.save(update_fields=['linked_trainer'])
-            print(f'Тренер {self.username} создан и привязан к пользователю')
-        
-        # Если это родитель и у него нет связанного ребенка, создаем его
-        elif self.role == 'parent' and not self.linked_child:
-            child, created = Child.objects.get_or_create(
-                full_name=f'Ребенок {self.username}',
-                defaults={
-                    'birth_date': timezone.now().date(),
-                    'is_active': True
-                }
-            )
-            self.linked_child = child
-            self.save(update_fields=['linked_child'])
-            print(f'Ребенок {self.username} создан и привязан к пользователю')
+        # Создание Trainer/Child и привязка — после коммита транзакции (избегаем IntegrityError в админке)
+        role = self.role
+        user_pk = self.pk
+        username = self.username
+
+        if role == 'trainer' and not self.linked_trainer:
+            def link_trainer():
+                user = User.objects.get(pk=user_pk)
+                if user.linked_trainer_id:
+                    return
+                trainer, _ = Trainer.objects.get_or_create(
+                    full_name=f'Тренер {username}',
+                    defaults={'phone': '', 'work_space': ''}
+                )
+                User.objects.filter(pk=user_pk).update(linked_trainer_id=trainer.pk)
+            transaction.on_commit(link_trainer)
+
+        elif role == 'parent' and not self.linked_child:
+            def link_child():
+                user = User.objects.get(pk=user_pk)
+                if user.linked_child_id:
+                    return
+                child, _ = Child.objects.get_or_create(
+                    full_name=f'Ребенок {username}',
+                    defaults={
+                        'birth_date': timezone.now().date(),
+                        'is_active': True,
+                    }
+                )
+                User.objects.filter(pk=user_pk).update(linked_child_id=child.pk)
+            transaction.on_commit(link_child)
 
     
 
