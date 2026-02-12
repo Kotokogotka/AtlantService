@@ -28,6 +28,19 @@ class User(models.Model):
     linked_trainer = models.ForeignKey('Trainer', null=True, blank=True, on_delete=models.SET_NULL, related_name='users_linked')
     linked_child = models.ForeignKey('Child', null=True, blank=True, on_delete=models.SET_NULL, related_name='users_linked')
 
+    # Атрибуты для входа в Django Admin (admin.site.login проверяет is_active, is_staff)
+    @property
+    def is_staff(self):
+        return self.role == 'admin'
+
+    @property
+    def is_superuser(self):
+        return self.role == 'admin'
+
+    @property
+    def is_active(self):
+        return True
+
     def save(self, *args, **kwargs):
         # Если пароль не захэширован, сделать это
         if not self.password.startswith(('pbkdf2_sha256$', 'bcrypt$', 'argon2')):
