@@ -18,7 +18,15 @@ class SafeFkM2MAdminMixin:
             if not getattr(f, 'attname', None):
                 continue
             pk = getattr(obj, f.attname, None)
-            if pk is None:
+            if pk is None or pk == '' or (isinstance(pk, (int, float)) and pk == 0):
+                if getattr(f, 'null', False):
+                    setattr(obj, f.attname, None)
+                continue
+            try:
+                pk = int(pk)
+            except (TypeError, ValueError):
+                if getattr(f, 'null', False):
+                    setattr(obj, f.attname, None)
                 continue
             related_model = getattr(f, 'related_model', None)
             if not related_model or not related_model.objects.filter(pk=pk).exists():
@@ -91,6 +99,13 @@ class UserAdmin(SafeFkM2MAdminMixin, admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+    def save_model(self, request, obj, form, change):
+        # При создании сохраняем без FK — привязка trainer/child делается в model.save() через on_commit
+        if not change:
+            obj.linked_trainer_id = None
+            obj.linked_child_id = None
+        super().save_model(request, obj, form, change)
 
 
 
