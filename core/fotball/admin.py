@@ -9,7 +9,18 @@ class SafeFkM2MAdminMixin:
     """
     Миксин для всех админок: перед сохранением «чистим» FK (если ссылка не существует — в null),
     при сохранении M2M выставляем только существующие id. Устраняет IntegrityError при popup/пустой БД.
+    Также отключаем запись в django_admin_log (LogEntry), т.к. там FK на auth.User, а в админке
+    залогинен fotball.User — иначе при сохранении любой сущности получаем FOREIGN KEY constraint failed.
     """
+    def log_addition(self, request, object, message):
+        pass  # LogEntry.user_id → auth.User; request.user — fotball.User → IntegrityError
+
+    def log_change(self, request, object, message):
+        pass
+
+    def log_deletion(self, request, object, object_repr):
+        pass
+
     def save_model(self, request, obj, form, change):
         model = obj._meta.model
         for f in model._meta.get_fields():
